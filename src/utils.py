@@ -152,7 +152,7 @@ if __name__ == "__main__":
     frames = video_to_frames('./videos/vid1.mp4', './frames', frame_rate=1)
 
     # Split frames into follower and lead
-    follower, lead = split_frames(frames, 3)
+    follower, lead = split_frames(frames, t=3)
 
     # Show follower and lead frames side by side
     #show_split_frames(follower, lead)
