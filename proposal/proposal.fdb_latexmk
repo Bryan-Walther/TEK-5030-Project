@@ -1,5 +1,5 @@
 # Fdb version 4
-["pdflatex"] 1682683735 "notes.tex" "notes.pdf" "notes" 1682683735 0
+["pdflatex"] 1682684248 "proposal.tex" "proposal.pdf" "proposal" 1682684248 0
   "/usr/local/texlive/2023/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/local/texlive/2023/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex7.tfm" 1246382020 1004 54797486969f23fa377b128694d548df ""
   "/usr/local/texlive/2023/texmf-dist/fonts/tfm/public/amsfonts/symbols/msam10.tfm" 1246382020 916 f87d7c45f9c908e672703b83b72241a3 ""
@@ -85,12 +85,12 @@
   "/usr/local/texlive/2023/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1681005177 4623355 b8cad38412faebe1ce5b780a45db67bd ""
   "/usr/local/texlive/2023/texmf-var/web2c/pdftex/pdflatex.fmt" 1681005162 7883466 dadbf0d6d62c001d995e5a3cfb4436f4 ""
   "/usr/local/texlive/2023/texmf.cnf" 1678822455 577 1b2b1af17af2508fb20dd85783af4050 ""
-  "notes.aux" 1682683735 554 04ae3964aa57b78538b565d0454a3de2 "pdflatex"
-  "notes.out" 1682683735 0 d41d8cd98f00b204e9800998ecf8427e "pdflatex"
-  "notes.tex" 1682683735 2607 2ea553022977f27fdcc9e241aad5d80b ""
+  "proposal.aux" 1682684248 554 04ae3964aa57b78538b565d0454a3de2 "pdflatex"
+  "proposal.out" 1682684248 0 d41d8cd98f00b204e9800998ecf8427e "pdflatex"
+  "proposal.tex" 1682683939 2607 2ea553022977f27fdcc9e241aad5d80b ""
   (generated)
-  "notes.aux"
-  "notes.log"
-  "notes.out"
-  "notes.pdf"
+  "proposal.aux"
+  "proposal.log"
+  "proposal.out"
+  "proposal.pdf"
   (rewritten before read)
