@@ -52,15 +52,15 @@
 \begin{document}
 \maketitle
 \section*{The project idea}
-The idea is to have two cameras, and estimate the relative pose between the two frames.
-The pose will be calculated from epipolar geometry. The steps for this will be as follows:
+The idea is to have two cameras, and estimate the relative pose between the two cameras.
+The pose will be estimated from epipolar geometry. The steps for this will be as follows:
 \begin{enumerate}
     \item Calibrate the cameras (if necessary)
     \item Establish a set of features in both images
     \item Match the set of features between the images
     \item Filter outliers
-    \item Calculate the essential matrix
-    \item Calculate the pose from the essential matrix
+    \item Estimate the essential matrix
+    \item Estimate the pose from the essential matrix
 \end{enumerate}
 
 We could then experiment with different feature descriptors such as ORB or SIFT and compare the results with some ground truth.
@@ -68,7 +68,7 @@ This ground truth can be acquired by getting frames which are moved apart from e
 Other parameters could be compared as well, such as the matching algorithm used.
 \\ \\
 Estimating the pose between two different cameras could be useful for many applications. 
-In the case of UVGs for example, we could use the estimated pose to control the speed of a follower vehicle such that it keeps a set distance from a lead vehicle.
+In the case of UGVs for example, we could use the estimated pose to control the speed of a follower vehicle such that it keeps a set distance from a lead vehicle.
 \\ \\
 All that we might need for this are access to a couple of cameras from the lab with known intrinsic parameters.
 \end{document}
