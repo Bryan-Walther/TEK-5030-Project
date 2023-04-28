@@ -1,5 +1,7 @@
 import cv2
 import os
+import numpy as np
+import scipy as sp
 
 def video_to_frames(video_path, frames_path=None, frame_rate=1):
     cap = cv2.VideoCapture(video_path)
@@ -92,6 +94,75 @@ def show_split_frames(follower, lead):
 
     cv2.destroyAllWindows()
 
-frames = video_to_frames('./videos/vid1.mp4', './frames', frame_rate=1)
-follower, lead = split_frames(frames, 3)
-show_split_frames(follower, lead)
+def extract_features(frames, descriptor_type='ORB'):
+    if descriptor_type == 'ORB':
+        feature_detector = cv2.ORB_create()
+    elif descriptor_type == 'SIFT':
+        feature_detector = cv2.xfeatures2d.SIFT_create()
+    elif descriptor_type == 'SURF':
+        feature_detector = cv2.xfeatures2d.SURF_create()
+
+    keypoints = []
+    descriptors = []
+
+    if isinstance(frames, list):
+        for i in range(len(frames)):
+            gray = cv2.cvtColor(frames[i], cv2.COLOR_BGR2GRAY)
+            kp, desc = feature_detector.detectAndCompute(gray, None)
+            keypoints.append(kp)
+            descriptors.append(desc)
+    else:
+        gray = cv2.cvtColor(frames, cv2.COLOR_BGR2GRAY)
+        kp, desc = feature_detector.detectAndCompute(gray, None)
+        keypoints.append(kp)
+        descriptors.append(desc)
+
+    return keypoints, descriptors
+def draw_keypoints(frames, keypoints):
+    output_frames = []
+
+    for i in range(len(frames)):
+        kp_frame = np.copy(frames[i])
+        kp_frame = cv2.drawKeypoints(kp_frame, keypoints[i], kp_frame, color=(0, 255, 0), flags=0)
+
+        output_frames.append(kp_frame)
+
+    return output_frames
+
+def match_features(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type='bf', ransac_thresh=5.0):
+    if matcher_type == 'bf':
+        # initialize a Brute-Force Matcher
+        matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    elif matcher_type == 'flann':
+        # initialize a FLANN Matcher
+        FLANN_INDEX_KDTREE = 1
+        index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+        search_params = dict(checks=50)
+        matcher = cv2.FlannBasedMatcher(index_params, search_params)
+    else:
+        raise ValueError(f"Invalid matcher type: {matcher_type}")
+    # TODO: Implement matching and RANSAC.
+
+### EXAMPLE USAGE ###
+if __name__ == "__main__":
+    EXTRACTION_TYPE = 'ORB'
+    MATCHER_TYPE = 'bf'
+    
+    # Convert video to frames
+    frames = video_to_frames('./videos/vid1.mp4', './frames', frame_rate=1)
+
+    # Split frames into follower and lead
+    follower, lead = split_frames(frames, 3)
+
+    # Show follower and lead frames side by side
+    #show_split_frames(follower, lead)
+
+    # Extract features from frame/s using specified descriptor type
+    follower_keypoints, follower_descriptors = extract_features(follower, descriptor_type=EXTRACTION_TYPE)
+    lead_keypoints, lead_descriptors = extract_features(lead, descriptor_type=EXTRACTION_TYPE)
+
+    # Use this to visualize the features
+    show_split_frames(draw_keypoints(follower, follower_keypoints), draw_keypoints(lead, lead_keypoints))
+
+    # Do matching between two frames
+    #follower_kps, lead_kps, matches = match_features(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=MATCHER_TYPE)
