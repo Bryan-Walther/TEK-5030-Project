@@ -94,3 +94,4 @@ def show_split_frames(follower, lead):
 
 frames = video_to_frames('./videos/vid1.mp4', './frames', frame_rate=1)
 follower, lead = split_frames(frames, 3)
+show_split_frames(follower, lead)
