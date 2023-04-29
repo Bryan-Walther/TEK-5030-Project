@@ -114,10 +114,10 @@ def extract_features(frames, descriptor_type='ORB'):
     else:
         gray = cv2.cvtColor(frames, cv2.COLOR_BGR2GRAY)
         kp, desc = feature_detector.detectAndCompute(gray, None)
-        keypoints.append(kp)
-        descriptors.append(desc)
+        return kp, desc
 
     return keypoints, descriptors
+
 def draw_keypoints(frames, keypoints):
     output_frames = []
 
