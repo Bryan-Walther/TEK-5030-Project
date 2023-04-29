@@ -211,6 +211,11 @@ if __name__ == "__main__":
         - Write a camera calibration function to get the focal length and principal point.
         - Extract the pose from the essential matrix.
         - Try to write a function to help visualize the poses, maybe having a third window with overlaid poses?
+        - Writing a bunch of visualization functions will probably help for the report.
+        - Figure out what the commands at each time step t should look like. 
+          Do we just take a step of magnitude k in the direction of the normalized pose, if the magnitude of the pose is greater than some threshold t maybe?
+        - Refactor: some of these functions should probably not be here.
+        - (maybe, hopefully not) try to set up some simulation.
     '''
     EXTRACTION_TYPE = 'ORB' 
     MATCHER_TYPE = 'flann'
