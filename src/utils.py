@@ -3,7 +3,7 @@ import os
 import numpy as np
 import scipy as sp
 
-def video_to_frames(video_path, frames_path=None, frame_rate=1):
+def video_to_frames(video_path, frames_path=None, frame_rate=1) -> list:
     cap = cv2.VideoCapture(video_path)
 
     if not cap.isOpened():
@@ -42,8 +42,8 @@ def video_to_frames(video_path, frames_path=None, frame_rate=1):
 
     return frames
 
-# Iterate through any frame array
-def show_frames(frames):
+# Iterate through and show any frame array
+def show_frames(frames: list):
     for i, frame in enumerate(frames):
         cv2.imshow(f"Frame {i}", frame)
 
@@ -54,9 +54,16 @@ def show_frames(frames):
 
     cv2.destroyAllWindows()
 
-# Takes an array of video frames and creates two separate arrays at time t away from each other.
-# t decides how far apart the frames are in time(not necessarily in seconds, depending on the frame rate)
-def split_frames(frames, t):
+def split_frames(frames: list, t: int):
+    '''
+    Takes an array of video frames and creates two separate arrays at time t away from each other.
+    Input:
+        frames: array of video frames
+        t: decides how far apart the frames are in time(not necessarily in seconds, depending on the frame rate).
+    Output:
+        follower: array of frames that are t frames behind the lead camera
+        lead: array of frames that are t frames ahead of the follower camera
+    '''
     num_frames = len(frames)
 
     follower = [] # This camera will be behind
@@ -74,7 +81,7 @@ def split_frames(frames, t):
     return follower, lead
 
 # Iterate through the follower and lead frames side by side
-def show_split_frames(follower, lead):
+def show_split_frames(follower: list, lead: list):
     num_follower = len(follower)
     num_lead = len(lead)
 
@@ -94,6 +101,7 @@ def show_split_frames(follower, lead):
 
     cv2.destroyAllWindows()
 
+# Can extract features from a single frame or a batch of frames
 def extract_features(frames, descriptor_type='ORB'):
     if descriptor_type == 'ORB':
         feature_detector = cv2.ORB_create()
@@ -118,19 +126,12 @@ def extract_features(frames, descriptor_type='ORB'):
 
     return keypoints, descriptors
 
+# Draws the features onto the frames
 def draw_keypoints(frames, keypoints):
-    output_frames = []
-
-    for i in range(len(frames)):
-        kp_frame = np.copy(frames[i])
-        kp_frame = cv2.drawKeypoints(kp_frame, keypoints[i], kp_frame, color=(0, 255, 0), flags=0)
-
-        output_frames.append(kp_frame)
-
-    return output_frames
+    return [cv2.drawKeypoints(np.copy(frame), keypoints[i], frame, color=(0, 255, 0), flags=0) for i, frame in enumerate(frames)]
 
 # Match features between two frames or two sets of frames
-def match_features(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type='bf'):
+def match_features(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type='bf', ratio_thresh=0.75):
     if matcher_type == 'bf':
         # initialize a Brute-Force Matcher
         matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
@@ -150,7 +151,6 @@ def match_features(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type=
     matches = matcher.match(follower_desc.astype(np.uint8), lead_desc.astype(np.uint8))
     
     # filter good matches using Lowe's ratio test
-    ratio_thresh = 0.55
     good_matches = []
     for m in matches:
         if len(matches) > 1:
@@ -166,8 +166,8 @@ def match_features(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type=
     return follower_pts, lead_pts, good_matches
 
 # Does feature matching for a batch of frames
-def match_feature_batch(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type='bf'):
-    return [match_features(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=matcher_type)[2] for follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors in zip(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors)]
+def match_feature_batch(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type='bf', ratio_thresh=0.75):
+    return [match_features(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=matcher_type, ratio_thresh=ratio_thresh)[2] for follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors in zip(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors)]
 
 
 def visualize_matches(img1, keypoints1, img2, keypoints2, matches, show=False):
@@ -197,6 +197,9 @@ def estimate_esential_matrix(follower_pts, lead_pts, focal_length, principal_poi
 def pose_from_essential():
     pass
 
+def calibrate_camera():
+    pass
+
 ### EXAMPLE USAGE ###
 if __name__ == "__main__":
     '''
@@ -219,6 +222,7 @@ if __name__ == "__main__":
     '''
     EXTRACTION_TYPE = 'ORB' 
     MATCHER_TYPE = 'flann'
+    RATIOTHRESH = 0.55
     
     # Convert video to frames
     frames = video_to_frames('./videos/vid1.mp4', './frames', frame_rate=1)
@@ -237,9 +241,9 @@ if __name__ == "__main__":
     #show_split_frames(draw_keypoints(follower, follower_keypoints), draw_keypoints(lead, lead_keypoints))
 
     # Do matching between two frames
-    #_, _, matches = match_features(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=MATCHER_TYPE)
+    #_, _, matches = match_features(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
     # Do matches for a batch of frames
-    matches_per_frame = match_feature_batch(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=MATCHER_TYPE)
+    matches_per_frame = match_feature_batch(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
 
     # Visualize matches
     match_images = [visualize_matches(follower[i], follower_keypoints[i], lead[i], lead_keypoints[i], matches_per_frame[i]) for i in range(len(matches_per_frame))]
