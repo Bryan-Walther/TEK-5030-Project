@@ -182,16 +182,35 @@ def visualize_matches(img1, keypoints1, img2, keypoints2, matches, show=False):
 
     return vis_img
 
+# Estimates the essential matrix between two frames
+def estimate_esential_matrix(follower_pts, lead_pts, focal_length, principal_point):
+    '''
+    follower_pts: points in the follower frame, we can get this from the matching function
+    lead_pts: points in the lead frame, again we can get this from the matching functiona
+    focal_length and principal_point: intrinsic parameters of the camera, might need to calibrate for this, unless we use videos from the lab cameras.
+    '''
+    # calculate the essential matrix
+    E, mask = cv2.findEssentialMat(follower_pts, lead_pts, focal_length, principal_point, cv2.RANSAC, 0.999, 1.0)
+    return E, mask
+
+# Estimate the pose from the essential matrix
+def pose_from_essential():
+    pass
+
 ### EXAMPLE USAGE ###
 if __name__ == "__main__":
     '''
     Observations:
+        - ORB seems to give way fewer false matches than SIFT.
+        - Apparently, SURF is patented and no longer free to use.
+        - Using flann matcher gives a larger number of matches than bf matcher,
+          but does also increase the number of false matches.
+        - I think flann could be better given a lower ratio threshold.
 
-    - ORB seems to give way fewer false matches than SIFT.
-    - Apparently, SURF is patented and no longer free to use.
-    - Using flann matcher gives a larger number of matches than bf matcher,
-      but does also increase the number of false matches.
-    - I think flann could be better given a lower ratio threshold.
+    TODO:
+        - Write a camera calibration function to get the focal length and principal point.
+        - Extract the pose from the essential matrix.
+        - Try to write a function to help visualize the poses, maybe having a third window with overlaid poses?
     '''
     EXTRACTION_TYPE = 'ORB' 
     MATCHER_TYPE = 'flann'
