@@ -107,12 +107,12 @@ def extract_features(frames, descriptor_type='ORB'):
 
     if isinstance(frames, list):
         for i in range(len(frames)):
-            gray = cv2.cvtColor(frames[i], cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(frames[i], cv2.IMREAD_GRAYSCALE)
             kp, desc = feature_detector.detectAndCompute(gray, None)
             keypoints.append(kp)
             descriptors.append(desc)
     else:
-        gray = cv2.cvtColor(frames, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(frames, cv2.IMREAD_GRAYSCALE)
         kp, desc = feature_detector.detectAndCompute(gray, None)
         return kp, desc
 
@@ -129,30 +129,78 @@ def draw_keypoints(frames, keypoints):
 
     return output_frames
 
-def match_features(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type='bf', ransac_thresh=5.0):
+# Match features between two frames or two sets of frames
+def match_features(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type='bf'):
     if matcher_type == 'bf':
         # initialize a Brute-Force Matcher
         matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
     elif matcher_type == 'flann':
         # initialize a FLANN Matcher
-        FLANN_INDEX_KDTREE = 1
-        index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+        FLANN_INDEX_LSH = 6
+        index_params= dict(algorithm = FLANN_INDEX_LSH,
+                   table_number = 6, # 12
+                   key_size = 12,     # 20
+                   multi_probe_level = 1) #2
         search_params = dict(checks=50)
         matcher = cv2.FlannBasedMatcher(index_params, search_params)
     else:
         raise ValueError(f"Invalid matcher type: {matcher_type}")
-    # TODO: Implement matching and RANSAC.
+    
+    # match descriptors of the two images
+    matches = matcher.match(follower_desc.astype(np.uint8), lead_desc.astype(np.uint8))
+    
+    # filter good matches using Lowe's ratio test
+    ratio_thresh = 0.55
+    good_matches = []
+    for m in matches:
+        if len(matches) > 1:
+            if m.distance < ratio_thresh * matches[1].distance:
+                good_matches.append(m)
+        else:
+            if m.distance < ratio_thresh * 500:
+                good_matches.append(m)
+
+    follower_pts = np.float32([follower_kp[m.queryIdx].pt for m in good_matches]).reshape(-1,1,2)
+    lead_pts = np.float32([lead_kp[m.trainIdx].pt for m in good_matches]).reshape(-1,1,2)
+    
+    return follower_pts, lead_pts, good_matches
+
+# Does feature matching for a batch of frames
+def match_feature_batch(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type='bf'):
+    return [match_features(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=matcher_type)[2] for follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors in zip(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors)]
+
+
+def visualize_matches(img1, keypoints1, img2, keypoints2, matches, show=False):
+    vis_img = cv2.drawMatches(img1, keypoints1, img2, keypoints2, matches, None, flags=2)
+    
+    if show:
+        cv2.namedWindow("Matches", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Matches", (960, 480))
+        cv2.imshow("Matches", vis_img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    return vis_img
 
 ### EXAMPLE USAGE ###
 if __name__ == "__main__":
-    EXTRACTION_TYPE = 'ORB'
-    MATCHER_TYPE = 'bf'
+    '''
+    Observations:
+
+    - ORB seems to give way fewer false matches than SIFT.
+    - Apparently, SURF is patented and no longer free to use.
+    - Using flann matcher gives a larger number of matches than bf matcher,
+      but does also increase the number of false matches.
+    - I think flann could be better given a lower ratio threshold.
+    '''
+    EXTRACTION_TYPE = 'ORB' 
+    MATCHER_TYPE = 'flann'
     
     # Convert video to frames
     frames = video_to_frames('./videos/vid1.mp4', './frames', frame_rate=1)
 
     # Split frames into follower and lead
-    follower, lead = split_frames(frames, t=3)
+    follower, lead = split_frames(frames, t=2)
 
     # Show follower and lead frames side by side
     #show_split_frames(follower, lead)
@@ -162,7 +210,13 @@ if __name__ == "__main__":
     lead_keypoints, lead_descriptors = extract_features(lead, descriptor_type=EXTRACTION_TYPE)
 
     # Use this to visualize the features
-    show_split_frames(draw_keypoints(follower, follower_keypoints), draw_keypoints(lead, lead_keypoints))
+    #show_split_frames(draw_keypoints(follower, follower_keypoints), draw_keypoints(lead, lead_keypoints))
 
     # Do matching between two frames
-    #follower_kps, lead_kps, matches = match_features(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=MATCHER_TYPE)
+    #_, _, matches = match_features(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=MATCHER_TYPE)
+    # Do matches for a batch of frames
+    matches_per_frame = match_feature_batch(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=MATCHER_TYPE)
+
+    # Visualize matches
+    match_images = [visualize_matches(follower[i], follower_keypoints[i], lead[i], lead_keypoints[i], matches_per_frame[i]) for i in range(len(matches_per_frame))]
+    show_frames(match_images)
