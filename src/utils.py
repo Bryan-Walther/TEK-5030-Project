@@ -10,21 +10,17 @@ def video_to_frames(video_path, frames_path=None, frame_rate=1) -> list:
         print("Error opening video file")
 
     fps = cap.get(cv2.CAP_PROP_FPS)
-
     frame_interval = int(round(fps / frame_rate))
 
     frame_count = 0
     seq_num = 0
     frames = []
-
     while cap.isOpened():
         ret, frame = cap.read()
-
         if not ret:
             break
 
         frame_count += 1
-
         if frame_count % frame_interval == 0:
             if frames_path:
                 video_name = os.path.splitext(os.path.basename(video_path))[0]
@@ -48,7 +44,6 @@ def show_frames(frames: list):
         cv2.imshow(f"Frame {i}", frame)
 
         key = cv2.waitKey(0)
-
         if key == ord('q'):
             break
 
