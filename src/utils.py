@@ -177,23 +177,22 @@ def visualize_matches(img1, keypoints1, img2, keypoints2, matches, show=False):
 
     return vis_img
 
-# Estimates the essential matrix between two frames
-def estimate_esential_matrix(follower_pts, lead_pts, focal_length, principal_point):
+# Estimate the pose from the essential matrix
+def estimate_pose(follower_pts, lead_pts, focal_length=1, principal_point=(0, 0)):
     '''
     follower_pts: points in the follower frame, we can get this from the matching function
     lead_pts: points in the lead frame, again we can get this from the matching functiona
     focal_length and principal_point: intrinsic parameters of the camera, might need to calibrate for this, unless we use videos from the lab cameras.
     '''
-    # calculate the essential matrix
+    camera_matrix = np.array([[focal_length, 0, principal_point[0]], [0, focal_length, principal_point[1]], [0, 0, 1]], dtype=np.float32)
+
     E, mask = cv2.findEssentialMat(follower_pts, lead_pts, focal_length, principal_point, cv2.RANSAC, 0.999, 1.0)
-    return E, mask
 
-# Estimate the pose from the essential matrix
-def pose_from_essential():
-    pass
+    _, R, t, _ = cv2.recoverPose(E, follower_pts, lead_pts, camera_matrix, mask=mask)
 
-def calibrate_camera():
-    pass
+    return R, t
+
+
 
 ### EXAMPLE USAGE ###
 if __name__ == "__main__":
@@ -207,23 +206,23 @@ if __name__ == "__main__":
 
     TODO:
         - Write a camera calibration function to get the focal length and principal point.
-        - Extract the pose from the essential matrix.
+        - Extend estimate_pose function to calculate the scale factor which can give us the relative baseline/distance from the cameras
         - Try to write a function to help visualize the poses, maybe having a third window with overlaid poses?
         - Writing a bunch of visualization functions will probably help for the report.
         - Figure out what the commands at each time step t should look like. 
-          Do we just take a step of magnitude k in the direction of the normalized pose, if the magnitude of the pose is greater than some threshold t maybe?
+          Do we just take a step of magnitude k in the direction of the normalized pose, if the scale factor is greater than some threshold maybe?
         - Refactor: some of these functions should probably not be here.
         - (maybe, hopefully not) try to set up some simulation.
     '''
     EXTRACTION_TYPE = 'ORB' 
     MATCHER_TYPE = 'flann'
-    RATIOTHRESH = 0.55
+    RATIOTHRESH = 0.5
     
     # Convert video to frames
     frames = video_to_frames('./videos/vid1.mp4', './frames', frame_rate=1)
 
     # Split frames into follower and lead
-    follower, lead = split_frames(frames, t=2)
+    follower, lead = split_frames(frames, t=1)
 
     # Show follower and lead frames side by side
     #show_split_frames(follower, lead)
@@ -243,3 +242,9 @@ if __name__ == "__main__":
     # Visualize matches
     match_images = [visualize_matches(follower[i], follower_keypoints[i], lead[i], lead_keypoints[i], matches_per_frame[i]) for i in range(len(matches_per_frame))]
     show_frames(match_images)
+
+    # Estimate the essential matrix
+    idx = 0
+    follower_pts, lead_pts, _ = match_features(follower_keypoints[idx], follower_descriptors[idx], lead_keypoints[idx], lead_descriptors[idx], matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
+    R, t = estimate_pose(follower_pts, lead_pts)
+    print(t)
