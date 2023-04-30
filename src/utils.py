@@ -217,6 +217,29 @@ def compute_rectification_transforms(img1, img2, kp1, kp2, matches):
 
     return F, H1, H2, mask
 
+def draw_epipolar_lines(img1, img2, kp1, kp2, matches):
+    F, H1, H2, mask = compute_rectification_transforms(img1, img2, kp1, kp2, matches)
+
+    pts1 = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
+    pts2 = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
+
+    # Compute the epilines for the inlier points in img1 and img2
+    lines1 = cv2.computeCorrespondEpilines(pts2, 2, F)
+    lines1 = lines1.reshape(-1, 3)
+    lines2 = cv2.computeCorrespondEpilines(pts1, 1, F)
+    lines2 = lines2.reshape(-1, 3)
+
+    img5, img6 = drawlines(img1.copy(), img2.copy(), lines1, pts1, pts2)
+    img3, img4 = drawlines(img2.copy(), img1.copy(), lines2, pts2, pts1)
+
+    # Stack the images horizontally
+    img_draw = np.hstack((img5, img3))
+    img_draw = cv2.resize(img_draw, (img_draw.shape[1]//2, img_draw.shape[0]//2))
+    cv2.namedWindow("Epipolar Lines", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("Epipolar Lines", (img_draw.shape[1], img_draw.shape[0]))
+    cv2.imshow("Epipolar Lines", img_draw)
+    cv2.waitKey(0)
+
 def rectify_images(img1, img2, kp1, kp2, matches):
     F, H1, H2, mask = compute_rectification_transforms(img1, img2, kp1, kp2, matches)
 
@@ -235,8 +258,8 @@ def rectify_images(img1, img2, kp1, kp2, matches):
     lines2 = cv2.computeCorrespondEpilines(pts1, 1, F)
     lines2 = lines2.reshape(-1, 3)
 
-    img5, img6 = drawlines(img1, img2, lines1, pts1, pts2)
-    img3, img4 = drawlines(img2, img1, lines2, pts2, pts1)
+    img5, img6 = drawlines(img1.copy(), img2.copy(), lines1, pts1, pts2)
+    img3, img4 = drawlines(img2.copy(), img1.copy(), lines2, pts2, pts1)
 
     # Apply the rectification transforms to the epilines
     img5_rect = cv2.warpPerspective(img5, H1, img5.shape[:2])
@@ -324,12 +347,12 @@ if __name__ == "__main__":
     RATIOTHRESH = 0.95 #
     
     # Convert video to frames
-    #frames = video_to_frames('./videos/horizontal_test.mp4', './frames', frame_rate=3)
+    frames = video_to_frames('./videos/horizontal_test.mp4', './frames', frame_rate=3)
     # Or load frames from directory
-    frames = load_frames('./frames/horizontal_test_frames')
+    #frames = load_frames('./frames/horizontal_test_frames')
 
     # Split frames into follower and lead
-    follower, lead = split_frames(frames, t=2)
+    follower, lead = split_frames(frames, t=1)
 
     # Show follower and lead frames side by side
     #show_split_frames(follower, lead)
@@ -353,6 +376,8 @@ if __name__ == "__main__":
     # Rectify images
     _, _, rectified_images = rectify_images_batch(follower, lead, follower_keypoints, lead_keypoints, matches_per_frame)
     show_frames(rectified_images)
+
+    draw_epipolar_lines(follower[3], lead[3], follower_keypoints[3], lead_keypoints[3], matches_per_frame[3])
 
     idx = 5 # Testing for a single time step
 
