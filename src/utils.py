@@ -182,7 +182,7 @@ def match_features(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type=
 
 
 # Does feature matching for a batch of frames
-def match_feature_batch(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type='bf', ratio_thresh=0.75):
+def match_feature_batch(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type='bf', ratio_thresh=0.75):
     return [match_features(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=matcher_type, ratio_thresh=ratio_thresh) for follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors in zip(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors)]
 
 
@@ -321,7 +321,38 @@ def estimate_pose(follower_kp, lead_kp, matches, focal_length=1, principal_point
 
     return R, t
 
+#https://gist.github.com/davegreenwood/e1d2227d08e24cc4e353d95d0c18c914
+def triangulate_nviews(P, ip):
+    if not len(ip) == len(P):
+        raise ValueError('Number of points and number of cameras not equal.')
+    n = len(P)
+    M = np.zeros([3*n, 4+n])
+    for i, (x, p) in enumerate(zip(ip, P)):
+        M[3*i:3*i+3, :4] = p
+        M[3*i:3*i+3, 4+i] = -x
+    V = np.linalg.svd(M)[-1]
+    X = V[-1, :4]
+    return X / X[3]
 
+def triangulate_points(keypoints1, keypoints2, matches, cameraMatrix1=None, cameraMatrix2=None):
+    # Extract the matched keypoints
+    pts1 = np.float32([keypoints1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
+    pts2 = np.float32([keypoints2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
+    pts1_u = cv2.convertPointsToHomogeneous(pts1)
+    pts2_u = cv2.convertPointsToHomogeneous(pts1)
+
+    if not len(pts1) == len(pts2):
+        raise ValueError('Number of points and number of cameras not equal.')
+    X = [triangulate_nviews([cameraMatrix1, cameraMatrix2], [pt[0], pt[1]]) for pt in zip(pts1_u, pts2_u)]
+    return X
+
+    return 
+
+def triangulate_points_batch(follower_kp, lead_kp, matches, cameraMatrix1=None, cameraMatrix2=None):
+    points3D = []
+    for i in range(len(follower_kp)):
+        points3D.append(triangulate_points(follower_kp[i], lead_kp[i], matches[i], cameraMatrix1, cameraMatrix2))
+    return points3D
 
 ### EXAMPLE USAGE ###
 if __name__ == "__main__":
@@ -345,9 +376,18 @@ if __name__ == "__main__":
     EXTRACTION_TYPE = 'ORB'
     MATCHER_TYPE = 'bf'
     RATIOTHRESH = 0.99 #
+
+    # Dummy camera matrices
+    P1 = np.array([[5.010e+03, 0.000e+00, 3.600e+02, 0.000e+00],
+               [0.000e+00, 5.010e+03, 6.400e+02, 0.000e+00],
+               [0.000e+00, 0.000e+00, 1.000e+00, 0.000e+00]])
+
+    P2 = np.array([[5.037e+03, -9.611e+01, -1.756e+03, 4.284e+03],
+                   [2.148e+02,  5.354e+03,  1.918e+02, 8.945e+02],
+                   [3.925e-01,  7.092e-02,  9.169e-01, 4.930e-01]])
     
     # Convert video to frames
-    frames = video_to_frames('./videos/vid2.mp4', './frames', frame_rate=3)
+    frames = video_to_frames('./videos/vid1.mp4', './frames', frame_rate=3)
     # Or load frames from directory
     #frames = load_frames('./frames/horizontal_test_frames')
 
@@ -362,7 +402,7 @@ if __name__ == "__main__":
     lead_keypoints, lead_descriptors = extract_features(lead, descriptor_type=EXTRACTION_TYPE)
 
     # Use this to visualize the features
-    show_split_frames(draw_keypoints(follower, follower_keypoints), draw_keypoints(lead, lead_keypoints))
+    #show_split_frames(draw_keypoints(follower, follower_keypoints), draw_keypoints(lead, lead_keypoints))
 
     # Do matching between two frames
     #_, _, matches = match_features(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
@@ -374,15 +414,18 @@ if __name__ == "__main__":
     show_frames(match_images)
 
     # Rectify images
-    _, _, rectified_images = rectify_images_batch(follower, lead, follower_keypoints, lead_keypoints, matches_per_frame)
-    show_frames(rectified_images)
+    #_, _, rectified_images = rectify_images_batch(follower, lead, follower_keypoints, lead_keypoints, matches_per_frame)
+    #show_frames(rectified_images)
+
+    # Triangulate points
+    points3D = triangulate_points_batch(follower_keypoints, lead_keypoints, matches_per_frame, cameraMatrix1=P1, cameraMatrix2=P2)
+    # Flatten list of lists
+    points3D = [item for sublist in points3D for item in sublist]
 
     idx = 5 # Testing for a single time step
-
-    # Rectify images and get the fundamental matrix, homographies and inlier mask.
-    #follower_rect, lead_rect, epipolar_img = rectify_images(follower[idx], lead[idx], follower_keypoints[idx], lead_keypoints[idx], matches_per_frame[idx])
 
     # Estimate the essential matrix between two frames
     matches = match_features(follower_keypoints[idx], follower_descriptors[idx], lead_keypoints[idx], lead_descriptors[idx], matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
     R, t = estimate_pose(follower_keypoints[idx], lead_keypoints[idx], matches)
-    print(t)
+    #print(t)
+
