@@ -10,14 +10,13 @@ if __name__ == "__main__":
         - Filtering with RANSAC improves the matching a lot.
 
     TODO:
-        - Rectify function is broken after RANSAC filtering.
         - Write a camera calibration function to get the intrinsic parameters.
-        - Extend estimate_pose function to calculate the scale factor which can give us the relative baseline/distance from the cameras
         - Try to write a function to help visualize the poses, maybe having a third window with overlaid poses?
         - Writing a bunch of visualization functions will probably help for the report.
-        - Figure out what the commands at each time step t should look like. 
-          Do we just take a step of magnitude k in the direction of the normalized pose, if the scale factor is greater than some threshold maybe?
-        - Refactor: some of these functions should probably not be here.
+        - Given the intrinsic parameters and the pose between the cameras, calculate the baseline/distance.
+           B = (f * T) / (x1 - x2) where f is the focal length and T is the translation vector that we get from the pose.
+           (x1 - x2) is the displacement of the matched features in the two cameras for all our correspondences. Maybe use the mean of these displacements for all our features.
+        - Depending on the results, we might want to try bundle adjustment to improve things further.
         - (maybe, hopefully not) try to set up some simulation.
     '''
     EXTRACTION_TYPE = 'ORB'
