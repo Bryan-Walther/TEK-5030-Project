@@ -177,6 +177,55 @@ def visualize_matches(img1, keypoints1, img2, keypoints2, matches, show=False):
 
     return vis_img
 
+# Computes the fundamental matrix and uses cv.stereoRectifyUncalibrated to compute the rectification transforms
+# https://www.andreasjakl.com/understand-and-apply-stereo-rectification-for-depth-maps-part-2/
+def rectify_images(img1, img2, kp1, kp2, matches, show=False):
+    # Convert keypoint coordinates to numpy arrays
+    pts1 = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
+    pts2 = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
+
+    # Compute the fundamental matrix
+    F, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC, 0.1, 0.99)
+
+    # Only use inlier points
+    pts1 = pts1[mask.ravel() == 1]
+    pts2 = pts2[mask.ravel() == 1]
+
+    # Compute the rectification transforms
+    _, H1, H2 = cv2.stereoRectifyUncalibrated(pts1, pts2, F, imgSize=img1.shape[:2])
+
+    # Apply the rectification transforms to the images
+    img1_rect = cv2.warpPerspective(img1, H1, img1.shape[:2])
+    img2_rect = cv2.warpPerspective(img2, H2, img2.shape[:2])
+
+    # Optionally show the rectified images with the epipolar lines drawn
+    if show:
+        inlier_matches = [matches[i] for i in range(len(matches)) if mask[i]==1]
+        img1_draw = cv2.drawMatches(img1, kp1, img2, kp2, inlier_matches, None, matchColor=(0, 255, 0), singlePointColor=None)
+        img2_draw = cv2.drawMatches(img2, kp2, img1, kp1, inlier_matches, None, matchColor=(0, 255, 0), singlePointColor=None)
+
+        lines1 = cv2.computeCorrespondEpilines(pts2, 2, F)
+        lines1 = lines1.reshape(-1, 3)
+        img1_draw = draw_lines(img1_draw, lines1)
+
+        lines2 = cv2.computeCorrespondEpilines(pts1, 1, F)
+        lines2 = lines2.reshape(-1, 3)
+        img2_draw = draw_lines(img2_draw, lines2)
+
+        cv2.imshow('Rectified Image 1', img1_draw)
+        cv2.imshow('Rectified Image 2', img2_draw)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    return img1_rect, img2_rect, H1, H2
+
+def draw_lines(img, lines):
+    for line in lines:
+        x0, y0 = map(int, [0, -line[2]/line[1]])
+        x1, y1 = map(int, [img.shape[1], -(line[2]+line[0]*img.shape[1])/line[1]])
+        img = cv2.line(img, (x0, y0), (x1, y1), (255, 0, 0), 1)
+    return img
+
 # Estimate the pose from the essential matrix
 def estimate_pose(follower_pts, lead_pts, focal_length=1, principal_point=(0, 0)):
     '''
@@ -205,7 +254,7 @@ if __name__ == "__main__":
         - I think flann could be better given a lower ratio threshold.
 
     TODO:
-        - Write a camera calibration function to get the focal length and principal point.
+        - Write a camera calibration function to get the intrinsic parameters.
         - Extend estimate_pose function to calculate the scale factor which can give us the relative baseline/distance from the cameras
         - Try to write a function to help visualize the poses, maybe having a third window with overlaid poses?
         - Writing a bunch of visualization functions will probably help for the report.
@@ -216,10 +265,10 @@ if __name__ == "__main__":
     '''
     EXTRACTION_TYPE = 'ORB' 
     MATCHER_TYPE = 'flann'
-    RATIOTHRESH = 0.5
+    RATIOTHRESH = 0.55
     
     # Convert video to frames
-    frames = video_to_frames('./videos/vid1.mp4', './frames', frame_rate=1)
+    frames = video_to_frames('./videos/vid1.mp4', './frames', frame_rate=2)
 
     # Split frames into follower and lead
     follower, lead = split_frames(frames, t=1)
@@ -243,8 +292,8 @@ if __name__ == "__main__":
     match_images = [visualize_matches(follower[i], follower_keypoints[i], lead[i], lead_keypoints[i], matches_per_frame[i]) for i in range(len(matches_per_frame))]
     show_frames(match_images)
 
-    # Estimate the essential matrix
-    idx = 0
+    # Estimate the essential matrix between two frames
+    idx = 15 
     follower_pts, lead_pts, _ = match_features(follower_keypoints[idx], follower_descriptors[idx], lead_keypoints[idx], lead_descriptors[idx], matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
     R, t = estimate_pose(follower_pts, lead_pts)
     print(t)
