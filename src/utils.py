@@ -38,6 +38,20 @@ def video_to_frames(video_path, frames_path=None, frame_rate=1) -> list:
 
     return frames
 
+def load_frames(frames_path):
+    frames = []
+    # Load the frames in order
+    for filename in os.listdir(frames_path):
+        if filename.endswith(".jpg"):
+            frame_path = os.path.join(frames_path, filename)
+            frames.append(frame_path)
+    # Sort the frames by their frame number
+    frames.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
+    loaded_frames = [cv2.imread(frame) for frame in frames]
+    return loaded_frames
+
+
+
 # Iterate through and show any frame array
 def show_frames(frames: list):
     for i, frame in enumerate(frames):
@@ -145,7 +159,7 @@ def match_features(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type=
     # match descriptors of the two images
     matches = matcher.match(follower_desc.astype(np.uint8), lead_desc.astype(np.uint8))
     
-    # filter good matches using Lowe's ratio test
+    # filter matches using Lowe's ratio test
     good_matches = []
     for m in matches:
         if len(matches) > 1:
@@ -157,12 +171,19 @@ def match_features(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type=
 
     follower_pts = np.float32([follower_kp[m.queryIdx].pt for m in good_matches]).reshape(-1,1,2)
     lead_pts = np.float32([lead_kp[m.trainIdx].pt for m in good_matches]).reshape(-1,1,2)
-    
-    return follower_pts, lead_pts, good_matches
+
+    # Filter using RANSAC
+    if len(good_matches) >= 4:
+        homography, mask = cv2.findHomography(follower_pts, lead_pts, cv2.RANSAC, 5.0) 
+        matches_mask = mask.ravel().tolist()
+        good_matches = [m for i, m in enumerate(good_matches) if matches_mask[i]]
+
+    return good_matches
+
 
 # Does feature matching for a batch of frames
 def match_feature_batch(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type='bf', ratio_thresh=0.75):
-    return [match_features(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=matcher_type, ratio_thresh=ratio_thresh)[2] for follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors in zip(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors)]
+    return [match_features(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=matcher_type, ratio_thresh=ratio_thresh) for follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors in zip(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors)]
 
 
 def visualize_matches(img1, keypoints1, img2, keypoints2, matches, show=False):
@@ -179,7 +200,7 @@ def visualize_matches(img1, keypoints1, img2, keypoints2, matches, show=False):
 
 # Computes the fundamental matrix and uses cv.stereoRectifyUncalibrated to compute the rectification transforms
 # https://www.andreasjakl.com/understand-and-apply-stereo-rectification-for-depth-maps-part-2/
-def rectify_images(img1, img2, kp1, kp2, matches, show=False):
+def compute_rectification_transforms(img1, img2, kp1, kp2, matches):
     # Convert keypoint coordinates to numpy arrays
     pts1 = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
     pts2 = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
@@ -187,39 +208,58 @@ def rectify_images(img1, img2, kp1, kp2, matches, show=False):
     # Compute the fundamental matrix
     F, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC, 0.1, 0.99)
 
-    # Only use inlier points
-    pts1 = pts1[mask.ravel() == 1]
-    pts2 = pts2[mask.ravel() == 1]
+    # Only use inlier points, check that mask is not empty and we have more than 8 points
+    #pts1 = pts1[mask.ravel() == 1]
+    #pts2 = pts2[mask.ravel() == 1]
 
     # Compute the rectification transforms
     _, H1, H2 = cv2.stereoRectifyUncalibrated(pts1, pts2, F, imgSize=img1.shape[:2])
 
-    # Optionally show the rectified images with the epipolar lines drawn
-    if show:
-        # Compute the epilines for the inlier points in img1 and img2
-        lines1 = cv2.computeCorrespondEpilines(pts2, 2, F)
-        lines1 = lines1.reshape(-1, 3)
-        lines2 = cv2.computeCorrespondEpilines(pts1, 1, F)
-        lines2 = lines2.reshape(-1, 3)
-
-        img5, img6 = drawlines(img1, img2, lines1, pts1, pts2)
-        img3, img4 = drawlines(img2, img1, lines2, pts2, pts1)
-
-        # Apply the rectification transforms to the epilines
-        img5_rect = cv2.warpPerspective(img5, H1, img5.shape[:2])
-        img3_rect = cv2.warpPerspective(img3, H2, img3.shape[:2])
-
-        # Stack the images horizontally
-        img_draw = np.hstack((img5_rect, img3_rect))
-        img_draw = cv2.resize(img_draw, (img_draw.shape[1]//2, img_draw.shape[0]//2))
-
-        cv2.namedWindow("Rectified", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("Rectified", (960, 480))
-        cv2.imshow("Rectified", img_draw)
-
-        cv2.waitKey(0)
-
     return F, H1, H2, mask
+
+def rectify_images(img1, img2, kp1, kp2, matches):
+    F, H1, H2, mask = compute_rectification_transforms(img1, img2, kp1, kp2, matches)
+
+    pts1 = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
+    pts2 = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
+
+    #pts1 = pts1[mask.ravel() == 1]
+    #pts2 = pts2[mask.ravel() == 1]
+
+    img1_rectified = cv2.warpPerspective(img1, H1, (img1.shape[1], img1.shape[0]))
+    img2_rectified = cv2.warpPerspective(img2, H2, (img2.shape[1], img2.shape[0]))
+
+    # Compute the epilines for the inlier points in img1 and img2
+    lines1 = cv2.computeCorrespondEpilines(pts2, 2, F)
+    lines1 = lines1.reshape(-1, 3)
+    lines2 = cv2.computeCorrespondEpilines(pts1, 1, F)
+    lines2 = lines2.reshape(-1, 3)
+
+    img5, img6 = drawlines(img1, img2, lines1, pts1, pts2)
+    img3, img4 = drawlines(img2, img1, lines2, pts2, pts1)
+
+    # Apply the rectification transforms to the epilines
+    img5_rect = cv2.warpPerspective(img5, H1, img5.shape[:2])
+    img3_rect = cv2.warpPerspective(img3, H2, img3.shape[:2])
+
+    # Stack the images horizontally
+    img_draw = np.hstack((img5_rect, img3_rect))
+    img_draw = cv2.resize(img_draw, (img_draw.shape[1]//2, img_draw.shape[0]//2))
+
+    return img1_rectified, img2_rectified, img_draw
+
+def rectify_images_batch(follower_imgs, lead_imgs, follower_kp, lead_kp, matches):
+    follower_rectified, lead_rectified, epipolar_imgs = [], [], []
+    for i in range(len(follower_imgs)):
+        try:
+            follower_rect, lead_rect, epipolar_img = rectify_images(follower_imgs[i], lead_imgs[i], follower_kp[i], lead_kp[i], matches[i])
+            follower_rectified.append(follower_rect)
+            lead_rectified.append(lead_rect)
+            epipolar_imgs.append(epipolar_img)
+        except:
+            print("Error rectifying images")
+            continue
+    return follower_rectified, lead_rectified, epipolar_imgs
 
 def drawlines(img1src, img2src, lines, pts1src, pts2src):
     ''' img1 - image on which we draw the epilines for the points in img2
@@ -240,12 +280,16 @@ def drawlines(img1src, img2src, lines, pts1src, pts2src):
     return img1src, img2src
 
 # Estimate the pose from the essential matrix
-def estimate_pose(follower_pts, lead_pts, focal_length=1, principal_point=(0, 0)):
+def estimate_pose(follower_kp, lead_kp, matches, focal_length=1, principal_point=(0, 0)):
     '''
     follower_pts: points in the follower frame, we can get this from the matching function
     lead_pts: points in the lead frame, again we can get this from the matching functiona
     focal_length and principal_point: intrinsic parameters of the camera, might need to calibrate for this, unless we use videos from the lab cameras.
     '''
+    # Convert keypoint coordinates to numpy arrays
+    follower_pts = np.float32([follower_kp[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
+    lead_pts = np.float32([lead_kp[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
+
     camera_matrix = np.array([[focal_length, 0, principal_point[0]], [0, focal_length, principal_point[1]], [0, 0, 1]], dtype=np.float32)
 
     E, mask = cv2.findEssentialMat(follower_pts, lead_pts, focal_length, principal_point, cv2.RANSAC, 0.999, 1.0)
@@ -262,11 +306,10 @@ if __name__ == "__main__":
     Observations:
         - ORB seems to give way fewer false matches than SIFT.
         - Apparently, SURF is patented and no longer free to use.
-        - Using flann matcher gives a larger number of matches than bf matcher,
-          but does also increase the number of false matches.
-        - I think flann could be better given a lower ratio threshold.
+        - Filtering with RANSAC improves the matching a lot.
 
     TODO:
+        - Rectify function is broken after RANSAC filtering.
         - Write a camera calibration function to get the intrinsic parameters.
         - Extend estimate_pose function to calculate the scale factor which can give us the relative baseline/distance from the cameras
         - Try to write a function to help visualize the poses, maybe having a third window with overlaid poses?
@@ -276,15 +319,17 @@ if __name__ == "__main__":
         - Refactor: some of these functions should probably not be here.
         - (maybe, hopefully not) try to set up some simulation.
     '''
-    EXTRACTION_TYPE = 'ORB' 
-    MATCHER_TYPE = 'flann'
-    RATIOTHRESH = 0.75
+    EXTRACTION_TYPE = 'ORB'
+    MATCHER_TYPE = 'bf'
+    RATIOTHRESH = 0.95 #
     
     # Convert video to frames
-    frames = video_to_frames('./videos/horizontal_test.mp4', './frames', frame_rate=2)
+    #frames = video_to_frames('./videos/horizontal_test.mp4', './frames', frame_rate=3)
+    # Or load frames from directory
+    frames = load_frames('./frames/horizontal_test_frames')
 
     # Split frames into follower and lead
-    follower, lead = split_frames(frames, t=1)
+    follower, lead = split_frames(frames, t=2)
 
     # Show follower and lead frames side by side
     #show_split_frames(follower, lead)
@@ -303,14 +348,18 @@ if __name__ == "__main__":
 
     # Visualize matches
     match_images = [visualize_matches(follower[i], follower_keypoints[i], lead[i], lead_keypoints[i], matches_per_frame[i]) for i in range(len(matches_per_frame))]
-    #show_frames(match_images)
+    show_frames(match_images)
+
+    # Rectify images
+    _, _, rectified_images = rectify_images_batch(follower, lead, follower_keypoints, lead_keypoints, matches_per_frame)
+    show_frames(rectified_images)
 
     idx = 5 # Testing for a single time step
 
     # Rectify images and get the fundamental matrix, homographies and inlier mask.
-    F, H1, H2, mask = rectify_images(follower[idx], lead[idx], follower_keypoints[idx], lead_keypoints[idx], matches_per_frame[idx], show=True)
+    #follower_rect, lead_rect, epipolar_img = rectify_images(follower[idx], lead[idx], follower_keypoints[idx], lead_keypoints[idx], matches_per_frame[idx])
 
     # Estimate the essential matrix between two frames
-    follower_pts, lead_pts, _ = match_features(follower_keypoints[idx], follower_descriptors[idx], lead_keypoints[idx], lead_descriptors[idx], matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
-    R, t = estimate_pose(follower_pts, lead_pts)
+    matches = match_features(follower_keypoints[idx], follower_descriptors[idx], lead_keypoints[idx], lead_descriptors[idx], matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
+    R, t = estimate_pose(follower_keypoints[idx], lead_keypoints[idx], matches)
     print(t)
