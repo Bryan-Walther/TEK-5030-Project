@@ -201,8 +201,8 @@ def rectify_images(img1, img2, kp1, kp2, matches, show=False):
     # Optionally show the rectified images with the epipolar lines drawn
     if show:
         inlier_matches = [matches[i] for i in range(len(matches)) if mask[i]==1]
-        img1_draw = cv2.drawMatches(img1, kp1, img2, kp2, inlier_matches, None, matchColor=(0, 255, 0), singlePointColor=None)
-        img2_draw = cv2.drawMatches(img2, kp2, img1, kp1, inlier_matches, None, matchColor=(0, 255, 0), singlePointColor=None)
+        img2_draw = cv2.drawMatches(img1, kp1, img2, kp2, inlier_matches, None, matchColor=(0, 255, 0), singlePointColor=None)
+        img1_draw = cv2.drawMatches(img2, kp2, img1, kp1, inlier_matches, None, matchColor=(0, 255, 0), singlePointColor=None)
 
         lines1 = cv2.computeCorrespondEpilines(pts2, 2, F)
         lines1 = lines1.reshape(-1, 3)
@@ -217,7 +217,7 @@ def rectify_images(img1, img2, kp1, kp2, matches, show=False):
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    return img1_rect, img2_rect, H1, H2
+    return F, H1, H2, mask
 
 def draw_lines(img, lines):
     for line in lines:
@@ -265,7 +265,7 @@ if __name__ == "__main__":
     '''
     EXTRACTION_TYPE = 'ORB' 
     MATCHER_TYPE = 'flann'
-    RATIOTHRESH = 0.55
+    RATIOTHRESH = 0.75
     
     # Convert video to frames
     frames = video_to_frames('./videos/vid1.mp4', './frames', frame_rate=2)
@@ -292,8 +292,12 @@ if __name__ == "__main__":
     match_images = [visualize_matches(follower[i], follower_keypoints[i], lead[i], lead_keypoints[i], matches_per_frame[i]) for i in range(len(matches_per_frame))]
     show_frames(match_images)
 
+    idx = 5 # Testing for a single time step
+
+    # Rectify images and get the fundamental matrix, homographies and inlier mask.
+    F, H1, H2, mask = rectify_images(follower[idx], lead[idx], follower_keypoints[idx], lead_keypoints[idx], matches_per_frame[idx], show=True)
+
     # Estimate the essential matrix between two frames
-    idx = 15 
     follower_pts, lead_pts, _ = match_features(follower_keypoints[idx], follower_descriptors[idx], lead_keypoints[idx], lead_descriptors[idx], matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
     R, t = estimate_pose(follower_pts, lead_pts)
     print(t)
