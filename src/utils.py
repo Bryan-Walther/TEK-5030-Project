@@ -137,7 +137,7 @@ def extract_features(frames, descriptor_type='ORB'):
 
 # Draws the features onto the frames
 def draw_keypoints(frames, keypoints):
-    return [cv2.drawKeypoints(np.copy(frame), keypoints[i], frame, color=(0, 255, 0), flags=0) for i, frame in enumerate(frames)]
+    return [cv2.drawKeypoints(np.copy(frame), keypoints[i], np.copy(frame), color=(0, 255, 0), flags=0) for i, frame in enumerate(frames)]
 
 # Match features between two frames or two sets of frames
 def match_features(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type='bf', ratio_thresh=0.75):
@@ -174,7 +174,7 @@ def match_features(follower_kp, follower_desc, lead_kp, lead_desc, matcher_type=
 
     # Filter using RANSAC
     if len(good_matches) >= 4:
-        homography, mask = cv2.findHomography(follower_pts, lead_pts, cv2.RANSAC, 5.0) 
+        homography, mask = cv2.findHomography(follower_pts, lead_pts, cv2.RANSAC, 7.0) 
         matches_mask = mask.ravel().tolist()
         good_matches = [m for i, m in enumerate(good_matches) if matches_mask[i]]
 
@@ -206,11 +206,11 @@ def compute_rectification_transforms(img1, img2, kp1, kp2, matches):
     pts2 = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
 
     # Compute the fundamental matrix
-    F, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC, 0.1, 0.99)
+    F, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC, 0.01, 0.9)
 
     # Only use inlier points, check that mask is not empty and we have more than 8 points
-    #pts1 = pts1[mask.ravel() == 1]
-    #pts2 = pts2[mask.ravel() == 1]
+    pts1 = pts1[mask.ravel() == 1]
+    pts2 = pts2[mask.ravel() == 1]
 
     # Compute the rectification transforms
     _, H1, H2 = cv2.stereoRectifyUncalibrated(pts1, pts2, F, imgSize=img1.shape[:2])
@@ -246,8 +246,8 @@ def rectify_images(img1, img2, kp1, kp2, matches):
     pts1 = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
     pts2 = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
 
-    #pts1 = pts1[mask.ravel() == 1]
-    #pts2 = pts2[mask.ravel() == 1]
+    pts1 = pts1[mask.ravel() == 1]
+    pts2 = pts2[mask.ravel() == 1]
 
     img1_rectified = cv2.warpPerspective(img1, H1, (img1.shape[1], img1.shape[0]))
     img2_rectified = cv2.warpPerspective(img2, H2, (img2.shape[1], img2.shape[0]))
@@ -344,15 +344,15 @@ if __name__ == "__main__":
     '''
     EXTRACTION_TYPE = 'ORB'
     MATCHER_TYPE = 'bf'
-    RATIOTHRESH = 0.95 #
+    RATIOTHRESH = 0.99 #
     
     # Convert video to frames
-    frames = video_to_frames('./videos/horizontal_test.mp4', './frames', frame_rate=3)
+    frames = video_to_frames('./videos/vid2.mp4', './frames', frame_rate=3)
     # Or load frames from directory
     #frames = load_frames('./frames/horizontal_test_frames')
 
     # Split frames into follower and lead
-    follower, lead = split_frames(frames, t=1)
+    follower, lead = split_frames(frames, t=2)
 
     # Show follower and lead frames side by side
     #show_split_frames(follower, lead)
@@ -362,7 +362,7 @@ if __name__ == "__main__":
     lead_keypoints, lead_descriptors = extract_features(lead, descriptor_type=EXTRACTION_TYPE)
 
     # Use this to visualize the features
-    #show_split_frames(draw_keypoints(follower, follower_keypoints), draw_keypoints(lead, lead_keypoints))
+    show_split_frames(draw_keypoints(follower, follower_keypoints), draw_keypoints(lead, lead_keypoints))
 
     # Do matching between two frames
     #_, _, matches = match_features(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
@@ -376,8 +376,6 @@ if __name__ == "__main__":
     # Rectify images
     _, _, rectified_images = rectify_images_batch(follower, lead, follower_keypoints, lead_keypoints, matches_per_frame)
     show_frames(rectified_images)
-
-    draw_epipolar_lines(follower[3], lead[3], follower_keypoints[3], lead_keypoints[3], matches_per_frame[3])
 
     idx = 5 # Testing for a single time step
 
