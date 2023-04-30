@@ -1,7 +1,7 @@
 import cv2
 import os
 import numpy as np
-import scipy as sp
+import matplotlib.pyplot as plt
 
 def video_to_frames(video_path, frames_path=None, frame_rate=1) -> list:
     cap = cv2.VideoCapture(video_path)
@@ -194,37 +194,50 @@ def rectify_images(img1, img2, kp1, kp2, matches, show=False):
     # Compute the rectification transforms
     _, H1, H2 = cv2.stereoRectifyUncalibrated(pts1, pts2, F, imgSize=img1.shape[:2])
 
-    # Apply the rectification transforms to the images
-    img1_rect = cv2.warpPerspective(img1, H1, img1.shape[:2])
-    img2_rect = cv2.warpPerspective(img2, H2, img2.shape[:2])
-
     # Optionally show the rectified images with the epipolar lines drawn
     if show:
-        inlier_matches = [matches[i] for i in range(len(matches)) if mask[i]==1]
-        img2_draw = cv2.drawMatches(img1, kp1, img2, kp2, inlier_matches, None, matchColor=(0, 255, 0), singlePointColor=None)
-        img1_draw = cv2.drawMatches(img2, kp2, img1, kp1, inlier_matches, None, matchColor=(0, 255, 0), singlePointColor=None)
-
+        # Compute the epilines for the inlier points in img1 and img2
         lines1 = cv2.computeCorrespondEpilines(pts2, 2, F)
         lines1 = lines1.reshape(-1, 3)
-        img1_draw = draw_lines(img1_draw, lines1)
-
         lines2 = cv2.computeCorrespondEpilines(pts1, 1, F)
         lines2 = lines2.reshape(-1, 3)
-        img2_draw = draw_lines(img2_draw, lines2)
 
-        cv2.imshow('Rectified Image 1', img1_draw)
-        cv2.imshow('Rectified Image 2', img2_draw)
+        img5, img6 = drawlines(img1, img2, lines1, pts1, pts2)
+        img3, img4 = drawlines(img2, img1, lines2, pts2, pts1)
+
+        # Apply the rectification transforms to the epilines
+        img5_rect = cv2.warpPerspective(img5, H1, img5.shape[:2])
+        img3_rect = cv2.warpPerspective(img3, H2, img3.shape[:2])
+
+        # Stack the images horizontally
+        img_draw = np.hstack((img5_rect, img3_rect))
+        img_draw = cv2.resize(img_draw, (img_draw.shape[1]//2, img_draw.shape[0]//2))
+
+        cv2.namedWindow("Rectified", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Rectified", (960, 480))
+        cv2.imshow("Rectified", img_draw)
+
         cv2.waitKey(0)
-        cv2.destroyAllWindows()
 
     return F, H1, H2, mask
 
-def draw_lines(img, lines):
-    for line in lines:
-        x0, y0 = map(int, [0, -line[2]/line[1]])
-        x1, y1 = map(int, [img.shape[1], -(line[2]+line[0]*img.shape[1])/line[1]])
-        img = cv2.line(img, (x0, y0), (x1, y1), (255, 0, 0), 1)
-    return img
+def drawlines(img1src, img2src, lines, pts1src, pts2src):
+    ''' img1 - image on which we draw the epilines for the points in img2
+        lines - corresponding epilines '''
+    r, c, _ = img1src.shape
+    # Edit: use the same random seed so that two images are comparable!
+    np.random.seed(0)
+    for r, pt1, pt2 in zip(lines, pts1src, pts2src):
+        color = tuple(np.random.randint(0, 255, 3).tolist())
+        x0, y0 = map(int, [0, -r[2]/r[1]])
+        x1, y1 = map(int, [c, -(r[2]+r[0]*c)/r[1]])
+        rad1 = np.round(pt1[0]).astype("int")
+        rad2 = np.round(pt2[0]).astype("int")
+        img1src = cv2.line(img1src, (x0, y0), (x1, y1), color, 1)
+        img1src = cv2.circle(img1src, tuple(rad1), 5, color, -1)
+        img2src = cv2.circle(img2src, tuple(rad2), 5, color, -1)
+
+    return img1src, img2src
 
 # Estimate the pose from the essential matrix
 def estimate_pose(follower_pts, lead_pts, focal_length=1, principal_point=(0, 0)):
@@ -268,7 +281,7 @@ if __name__ == "__main__":
     RATIOTHRESH = 0.75
     
     # Convert video to frames
-    frames = video_to_frames('./videos/vid1.mp4', './frames', frame_rate=2)
+    frames = video_to_frames('./videos/horizontal_test.mp4', './frames', frame_rate=2)
 
     # Split frames into follower and lead
     follower, lead = split_frames(frames, t=1)
@@ -290,7 +303,7 @@ if __name__ == "__main__":
 
     # Visualize matches
     match_images = [visualize_matches(follower[i], follower_keypoints[i], lead[i], lead_keypoints[i], matches_per_frame[i]) for i in range(len(matches_per_frame))]
-    show_frames(match_images)
+    #show_frames(match_images)
 
     idx = 5 # Testing for a single time step
 
