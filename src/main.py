@@ -28,6 +28,11 @@ if __name__ == "__main__":
         - Filtering with RANSAC improves the matching a lot.
         - The baseline calculation seems somewhat resonable if we at least know the fov of the camera and have good features.
             This seems to be the case with the dji drone video "dji_vid" using the correct fov of 94, as well as the image dimensions to set the principle point in the center.
+        - The baseline estimations seem more consistent when skipping ransac filtering on the matches, but filtering the baseline estimates instead.
+             Might be because RANSAC also removes a lot of false negatives, and without it, we get 10 times more estimates to work with which we can then filter.
+             Hard to say if these values are more accurate though without ground truth.
+        - RANSAC wasn't the problem, it was Lowe's ratio test. Removing it and keeping RANSAC gives way better results.
+            The baseline estimates are now very consistent, even without filtering.
 
     TODO:
         - Write a camera calibration function to get the intrinsic parameters. (maybe not necessary)
@@ -39,21 +44,27 @@ if __name__ == "__main__":
     '''
     EXTRACTION_TYPE = 'SIFT'
     MATCHER_TYPE = 'bf'
-    RATIOTHRESH = 0.99 #
-    video_processor = VideoProcessor(video_path='./videos/dji_vid.mp4', frames_path='./frames', frame_rate=4, t=1)
+    RATIOTHRESH = 0.59 #
+    video_processor = VideoProcessor(video_path='./videos/dji_vid2.mp4', frames_path='./frames', frame_rate=4, t=1)
 
     # Dummy camera intrinsic parameters
     image_width = video_processor.frame_width
     image_height = video_processor.frame_height
     fov = 94.0  # field of view in degrees (114 for my camera) 94 degrees for dji phantom 4 footage
+    sensor_width = 12.8333 # Sensor for DJI Phantom 4 
+    sensor_height = 7.2
     focal_length = (image_width / 2) / np.tan(np.deg2rad(fov / 2))
+
+    fx = focal_length * sensor_width / image_width
+    fy = focal_length * sensor_height / image_height
+
     cx = image_width / 2
     cy = image_height / 2
 
     # Camera intrinsic matrix
     K = np.array([
-        [focal_length, 0, cx],
-        [0, focal_length, cy],
+        [fx, 0, cx],
+        [0, fy, cy],
         [0, 0, 1]
     ]) 
     
@@ -74,7 +85,7 @@ if __name__ == "__main__":
     # Use this to visualize the features
     show_features_split(follower_extractor.draw_keypoints(), lead_extractor.draw_keypoints())
 
-    matcher = Matcher(follower_extractor, lead_extractor)
+    matcher = Matcher(follower_extractor, lead_extractor, RANSAC=True)
     matcher.match_features(matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
 
     # Visualize matches
@@ -114,7 +125,7 @@ if __name__ == "__main__":
 
         # Get the translation vector from the relative pose between the two cameras
         try:
-            R, T = estimate_pose(follower_keypoints[idx], lead_keypoints[idx], matcher.matches[idx], focal_length=focal_length, principal_point=(cx, cy))
+            R, T = estimate_pose(follower_keypoints[idx], lead_keypoints[idx], matcher.matches[idx], K, focal_length, principal_point=(cx, cy))
         except:
             continue
         T = T / T[2]  # Normalize translation vector
@@ -129,3 +140,4 @@ if __name__ == "__main__":
         print("Baseline for time {} is {} meters".format(idx, round(baseline / 1000, 3)))
         print("Baseline for time {} is {} meters (FILTERED)".format(idx, round(baseline_filtered / 1000, 3)))
         print("\n")
+

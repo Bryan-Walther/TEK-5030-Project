@@ -2,7 +2,7 @@ import cv2
 import os
 
 class VideoProcessor:
-    def __init__(self, video_path, frames_path=None, frame_rate=1, t=1, load_frames=False):   
+    def __init__(self, video_path, frames_path=None, frame_rate=1, t=1, load_frames=False, K=None, D=None):   
         self.video_path = video_path
         self.frames_path = frames_path
         self.frame_rate = frame_rate
@@ -17,6 +17,26 @@ class VideoProcessor:
         self.frame_width = self.follower_frames[0].shape[1]
         self.frame_height = self.follower_frames[0].shape[0]
 
+        # Camera calibration parameters
+        self.K = K
+        self.D = D
+        self.balance = 0.0
+
+        '''
+        # Undistort the frames
+        if self.K is not None and self.D is not None:
+            self.map1, self.map2 = self.init_undistort_rectify_map()
+
+        self.follower_frames = [cv2.remap(frame, self.map1, self.map2, cv2.INTER_LINEAR) for frame in self.follower_frames]
+        self.lead_frames = [cv2.remap(frame, self.map1, self.map2, cv2.INTER_LINEAR) for frame in self.lead_frames]
+
+        '''
+
+    def init_undistort_rectify_map(self):
+        newcameramtx, roi = cv2.getOptimalNewCameraMatrix(self.K, self.D, (self.frame_width,self.frame_height), self.balance, (self.frame_width, self.frame_height))
+        map1, map2 = cv2.initUndistortRectifyMap(self.K, self.D, None, newcameramtx, (w,h), cv2.CV_16SC2)
+
+        return map1, map2
 
     def video_to_frames(self) -> list:
         if not self.cap.isOpened():

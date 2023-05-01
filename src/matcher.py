@@ -2,12 +2,13 @@ import cv2
 import numpy as np
 
 class Matcher:
-    def __init__(self, follower_extractor, lead_extractor):
+    def __init__(self, follower_extractor, lead_extractor, RANSAC=True):
         self.follower_extractor = follower_extractor
         self.lead_extractor = lead_extractor
 
         self.follower_keypoints, self.follower_descriptors, self.follower_frames = self.follower_extractor.get_params()
         self.lead_keypoints, self.lead_descriptors, self.lead_frames = self.lead_extractor.get_params()
+        self.RANSAC = RANSAC
 
         self.matches = None
         self.batch = False
@@ -41,6 +42,9 @@ class Matcher:
 
         # filter matches using Lowe's ratio test
         good_matches = []
+
+        # Lowe's ratio test sucks
+        '''
         for m in matches:
             if len(matches) > 1:
                 if m.distance < ratio_thresh * matches[1].distance:
@@ -48,15 +52,17 @@ class Matcher:
             else:
                 if m.distance < ratio_thresh * 500:
                     good_matches.append(m)
+        '''
 
-        follower_pts = np.float32([follower_kp[m.queryIdx].pt for m in good_matches]).reshape(-1,1,2)
-        lead_pts = np.float32([lead_kp[m.trainIdx].pt for m in good_matches]).reshape(-1,1,2)
+        if self.RANSAC: 
+            follower_pts = np.float32([follower_kp[m.queryIdx].pt for m in matches]).reshape(-1,1,2)
+            lead_pts = np.float32([lead_kp[m.trainIdx].pt for m in matches]).reshape(-1,1,2)
 
-        # Filter using RANSAC
-        if len(good_matches) >= 4:
-            homography, mask = cv2.findHomography(follower_pts, lead_pts, cv2.RANSAC, 7.0)
-            matches_mask = mask.ravel().tolist()
-            good_matches = [m for i, m in enumerate(good_matches) if matches_mask[i]]
+            # Filter using RANSAC
+            if len(matches) >= 4:
+                homography, mask = cv2.findHomography(follower_pts, lead_pts, cv2.RANSAC, 7.0)
+                matches_mask = mask.ravel().tolist()
+                good_matches = [m for i, m in enumerate(matches) if matches_mask[i]]
 
         return good_matches
 

@@ -49,6 +49,7 @@ def compute_rectification_transforms(img1, img2, kp1, kp2, matches):
     pts2 = pts2[mask.ravel() == 1]
 
     # Compute the rectification transforms
+    # Use cv2.stereoRectify instead after calibration when we have K and D matrix
     _, H1, H2 = cv2.stereoRectifyUncalibrated(pts1, pts2, F, imgSize=img1.shape[:2])
 
     return F, H1, H2, mask
@@ -139,7 +140,7 @@ def drawlines(img1src, img2src, lines, pts1src, pts2src):
     return img1src, img2src
 
 # Estimate the pose from the essential matrix
-def estimate_pose(follower_kp, lead_kp, matches, focal_length=1, principal_point=(0, 0)):
+def estimate_pose(follower_kp, lead_kp, matches, camera_matrix, focal_length, principal_point):
     '''
     follower_pts: points in the follower frame, we can get this from the matching function
     lead_pts: points in the lead frame, again we can get this from the matching functiona
@@ -148,8 +149,6 @@ def estimate_pose(follower_kp, lead_kp, matches, focal_length=1, principal_point
     # Convert keypoint coordinates to numpy arrays
     follower_pts = np.float32([follower_kp[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
     lead_pts = np.float32([lead_kp[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
-
-    camera_matrix = np.array([[focal_length, 0, principal_point[0]], [0, focal_length, principal_point[1]], [0, 0, 1]], dtype=np.float32)
 
     E, mask = cv2.findEssentialMat(follower_pts, lead_pts, focal_length, principal_point, cv2.RANSAC, 0.999, 1.0)
 
