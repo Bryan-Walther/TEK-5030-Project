@@ -13,19 +13,16 @@ if __name__ == "__main__":
         - Filtering with RANSAC improves the matching a lot.
 
     TODO:
-        - Write a camera class with relative poses and camera intrinsics.
         - Write a camera calibration function to get the intrinsic parameters. (maybe not necessary)
         - Try to write a function to help visualize the poses, maybe having a third window with overlaid poses?
         - Writing a bunch of visualization functions will probably help for the report.
         - Given the intrinsic parameters and the relative pose between the cameras, calculate the baseline/distance.
-           B = (f * T) / (x1 - x2) where f is the focal length and T is the translation vector that we get from the pose.
-           (x1 - x2) is the displacement of the matched features between two cameras for all our correspondences. Maybe use the mean of these displacements for all our features.
         - Depending on the results, we might want to try bundle adjustment to improve things further.
         - (maybe, hopefully not) try to set up some simulation.
     '''
-    EXTRACTION_TYPE = 'ORB'
+    EXTRACTION_TYPE = 'SIFT'
     MATCHER_TYPE = 'bf'
-    RATIOTHRESH = 0.99 #
+    RATIOTHRESH = 0.9 #
 
     # Dummy camera matrices
     P1 = np.array([[5.010e+03, 0.000e+00, 3.600e+02, 0.000e+00],
@@ -37,7 +34,7 @@ if __name__ == "__main__":
                    [3.925e-01,  7.092e-02,  9.169e-01, 4.930e-01]])
     
     # Convert video to frames
-    video_processor = VideoProcessor(video_path='./videos/vid2.mp4', frames_path='./frames', frame_rate=4, t=1)
+    video_processor = VideoProcessor(video_path='./videos/horizontal_test.mp4', frames_path='./frames', frame_rate=3, t=1)
     # Or load frames from directory
     #video_processor = VideoProcessor(video_path='./videos/vid1.mp4', frames_path='./frames', frame_rate=1, t=1, load_frames=True)
 
@@ -68,6 +65,39 @@ if __name__ == "__main__":
     show_frames(rectified_images)
 
     # Triangulate points
-    points3D = triangulate_points_batch(follower_keypoints, lead_keypoints, matcher.matches, cameraMatrix1=P1, cameraMatrix2=P2)
+    #points3D = triangulate_points_batch(follower_keypoints, lead_keypoints, matcher.matches, cameraMatrix1=P1, cameraMatrix2=P2)
     # Flatten list of lists
-    points3D = [item for sublist in points3D for item in sublist]
+    #points3D = [item for sublist in points3D for item in sublist]
+
+    # Move this to a util function
+    # Calculate baseline (This is maybe wrong or at least not very accurate, especially without calibration)
+    focal_length = P1[0, 0]  # Assuming both cameras have the same focal length
+    # get baseline for all frames
+    baseline_per_frame = []
+    for idx in range(len(follower_frames)):
+        displacements = []
+        
+        # Calculate the disparity of the matched features between the two cameras
+        for m in matcher.matches[idx]:
+            x1, y1 = follower_keypoints[idx][m.queryIdx].pt
+            x2, y2 = lead_keypoints[idx][m.trainIdx].pt
+            disparity = abs(x2 - x1)
+            displacements.append(disparity)
+
+        # Use the median or mean of the displacements as the baseline?
+        #mean_disparity = np.median(displacements)
+        mean_disparity = np.mean(displacements)
+
+        # Get the translation vector from the relative pose between the two cameras
+        try:
+            R, T = estimate_pose(follower_keypoints[idx], lead_keypoints[idx], matcher.matches[idx], focal_length=focal_length, principal_point=(P1[0, 2], P1[1, 2]))
+        except:
+            continue
+        T = T / T[2]  # Normalize translation vector
+        T = T.reshape((3, 1))
+
+        # Calculate baseline using the magnitude of the translation vector
+        baseline = (focal_length * mean_disparity) / np.linalg.norm(T)
+        baseline_per_frame.append(baseline)
+        # Print baseline from mm to meters
+        print("Baseline for time {} is {}".format(idx, baseline / 1000))
