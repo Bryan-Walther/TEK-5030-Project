@@ -4,6 +4,21 @@ from utils import *
 from videoProcessor import VideoProcessor
 from extractor import Extractor
 from matcher import Matcher
+from scipy.stats import iqr
+
+def filter_estimates(baseline_estimates):
+    baseline_estimates = np.array(baseline_estimates)
+
+    median = np.median(baseline_estimates)
+    q1, q3 = np.percentile(baseline_estimates, [25, 75])
+    iqr = q3 - q1
+
+    threshold = 1.5 * iqr
+    inliers = baseline_estimates[np.abs(baseline_estimates - median) < threshold]
+    print("Inliers: ", len(inliers))
+    baseline_mean = np.mean(inliers)
+
+    return baseline_mean
 
 if __name__ == "__main__":
     '''
@@ -24,7 +39,7 @@ if __name__ == "__main__":
     '''
     EXTRACTION_TYPE = 'SIFT'
     MATCHER_TYPE = 'bf'
-    RATIOTHRESH = 0.79 #
+    RATIOTHRESH = 0.99 #
     video_processor = VideoProcessor(video_path='./videos/dji_vid.mp4', frames_path='./frames', frame_rate=4, t=1)
 
     # Dummy camera intrinsic parameters
@@ -77,7 +92,7 @@ if __name__ == "__main__":
     # Flatten list of lists
     #points3D = [item for sublist in points3D for item in sublist]
 
-    # Move this to a util function
+    # Move this to a util.py as a function
     # Calculate baseline (This seems to be somewhat reasonable for the dji footage with the dummy camera parameters)
     # get baseline for all frames
     baseline_per_frame = []
@@ -92,8 +107,10 @@ if __name__ == "__main__":
             displacements.append(disparity)
 
         # Use the median or mean of the displacements as the baseline?
+        # median is probably more robust to outliers
         #mean_disparity = np.median(displacements)
         mean_disparity = np.mean(displacements)
+        mean_disparity_filtered = filter_estimates(displacements)
 
         # Get the translation vector from the relative pose between the two cameras
         try:
@@ -105,6 +122,10 @@ if __name__ == "__main__":
 
         # Calculate baseline using the magnitude of the translation vector
         baseline = (focal_length * mean_disparity) / np.linalg.norm(T)
+        baseline_filtered = (focal_length * mean_disparity_filtered) / np.linalg.norm(T)
         baseline_per_frame.append(baseline)
         # Print baseline from mm to meters
-        print("Baseline for time {} is {}".format(idx, baseline / 1000))
+        # round baseline to 3 decimal places
+        print("Baseline for time {} is {} meters".format(idx, round(baseline / 1000, 3)))
+        print("Baseline for time {} is {} meters (FILTERED)".format(idx, round(baseline_filtered / 1000, 3)))
+        print("\n")
