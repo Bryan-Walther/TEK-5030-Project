@@ -13,14 +13,14 @@ if __name__ == "__main__":
         - Filtering with RANSAC improves the matching a lot.
 
     TODO:
-        - Write a camera calibration function to get the intrinsic parameters.
+        - Write a camera class with relative poses and camera intrinsics.
+        - Write a camera calibration function to get the intrinsic parameters. (maybe not necessary)
         - Try to write a function to help visualize the poses, maybe having a third window with overlaid poses?
         - Writing a bunch of visualization functions will probably help for the report.
-        - Given the intrinsic parameters and the pose between the cameras, calculate the baseline/distance.
+        - Given the intrinsic parameters and the relative pose between the cameras, calculate the baseline/distance.
            B = (f * T) / (x1 - x2) where f is the focal length and T is the translation vector that we get from the pose.
-           (x1 - x2) is the displacement of the matched features in the two cameras for all our correspondences. Maybe use the mean of these displacements for all our features.
+           (x1 - x2) is the displacement of the matched features between two cameras for all our correspondences. Maybe use the mean of these displacements for all our features.
         - Depending on the results, we might want to try bundle adjustment to improve things further.
-        - Refactor util.py, its just a bunch of functions for now.
         - (maybe, hopefully not) try to set up some simulation.
     '''
     EXTRACTION_TYPE = 'ORB'
