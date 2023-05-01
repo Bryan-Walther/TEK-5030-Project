@@ -1,6 +1,9 @@
 import cv2
 import numpy as np
 from utils import *
+from videoProcessor import VideoProcessor
+from extractor import Extractor
+from matcher import Matcher
 
 if __name__ == "__main__":
     '''
@@ -17,6 +20,7 @@ if __name__ == "__main__":
            B = (f * T) / (x1 - x2) where f is the focal length and T is the translation vector that we get from the pose.
            (x1 - x2) is the displacement of the matched features in the two cameras for all our correspondences. Maybe use the mean of these displacements for all our features.
         - Depending on the results, we might want to try bundle adjustment to improve things further.
+        - Refactor util.py, its just a bunch of functions for now.
         - (maybe, hopefully not) try to set up some simulation.
     '''
     EXTRACTION_TYPE = 'ORB'
@@ -33,44 +37,37 @@ if __name__ == "__main__":
                    [3.925e-01,  7.092e-02,  9.169e-01, 4.930e-01]])
     
     # Convert video to frames
-    frames = video_to_frames('./videos/vid2.mp4', './frames', frame_rate=4)
+    video_processor = VideoProcessor(video_path='./videos/vid2.mp4', frames_path='./frames', frame_rate=4, t=1)
     # Or load frames from directory
-    #frames = load_frames('./frames/horizontal_test_frames')
-
-    # Split frames into follower and lead
-    follower, lead = split_frames(frames, t=1)
+    #video_processor = VideoProcessor(video_path='./videos/vid1.mp4', frames_path='./frames', frame_rate=1, t=1, load_frames=True)
 
     # Show follower and lead frames side by side
-    #show_split_frames(follower, lead)
+    #video_processor.show_split_frames()
 
     # Extract features from frame/s using specified descriptor type
-    follower_keypoints, follower_descriptors = extract_features(follower, descriptor_type=EXTRACTION_TYPE)
-    lead_keypoints, lead_descriptors = extract_features(lead, descriptor_type=EXTRACTION_TYPE)
+    follower_extractor = Extractor(video_processor.follower_frames)
+    follower_extractor.extract_features(descriptor_type=EXTRACTION_TYPE)
+
+    lead_extractor = Extractor(video_processor.lead_frames)
+    lead_extractor.extract_features(descriptor_type=EXTRACTION_TYPE)
 
     # Use this to visualize the features
-    show_split_frames(draw_keypoints(follower, follower_keypoints), draw_keypoints(lead, lead_keypoints))
+    show_features_split(follower_extractor.draw_keypoints(), lead_extractor.draw_keypoints())
 
-    # Do matching between two frames
-    #_, _, matches = match_features(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
-    # Do matches for a batch of frames
-    matches_per_frame = match_feature_batch(follower_keypoints, follower_descriptors, lead_keypoints, lead_descriptors, matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
+    matcher = Matcher(follower_extractor, lead_extractor)
+    matcher.match_features(matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
 
     # Visualize matches
-    match_images = [visualize_matches(follower[i], follower_keypoints[i], lead[i], lead_keypoints[i], matches_per_frame[i]) for i in range(len(matches_per_frame))]
+    match_images = matcher.visualize_matches()
     show_frames(match_images)
 
     # Rectify images
-    _, _, rectified_images = rectify_images_batch(follower, lead, follower_keypoints, lead_keypoints, matches_per_frame)
+    follower_keypoints, follower_descriptors, follower_frames = follower_extractor.get_params()
+    lead_keypoints, lead_descriptors, lead_frames = lead_extractor.get_params()
+    _, _, rectified_images = rectify_images_batch(follower_frames, lead_frames, follower_keypoints, lead_keypoints, matcher.matches)
     show_frames(rectified_images)
 
     # Triangulate points
-    #points3D = triangulate_points_batch(follower_keypoints, lead_keypoints, matches_per_frame, cameraMatrix1=P1, cameraMatrix2=P2)
+    points3D = triangulate_points_batch(follower_keypoints, lead_keypoints, matcher.matches, cameraMatrix1=P1, cameraMatrix2=P2)
     # Flatten list of lists
-    #points3D = [item for sublist in points3D for item in sublist]
-
-    # Estimate the essential matrix between two frames
-    idx = 5 # Testing for a single time step
-    matches = match_features(follower_keypoints[idx], follower_descriptors[idx], lead_keypoints[idx], lead_descriptors[idx], matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
-    R, t = estimate_pose(follower_keypoints[idx], lead_keypoints[idx], matches)
-    print(t)
-
+    points3D = [item for sublist in points3D for item in sublist]
