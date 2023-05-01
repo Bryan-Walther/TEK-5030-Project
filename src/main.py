@@ -11,6 +11,8 @@ if __name__ == "__main__":
         - SIFT is a better than ORB, takes longer though.
         - Apparently, SURF is patented and no longer free to use.
         - Filtering with RANSAC improves the matching a lot.
+        - The baseline calculation seems somewhat resonable if we at least know the fov of the camera and have good features.
+            This seems to be the case with the dji drone video "dji_vid" using the correct fov of 94, as well as the image dimensions to set the principle point in the center.
 
     TODO:
         - Write a camera calibration function to get the intrinsic parameters. (maybe not necessary)
@@ -22,19 +24,25 @@ if __name__ == "__main__":
     '''
     EXTRACTION_TYPE = 'SIFT'
     MATCHER_TYPE = 'bf'
-    RATIOTHRESH = 0.9 #
+    RATIOTHRESH = 0.79 #
+    video_processor = VideoProcessor(video_path='./videos/dji_vid.mp4', frames_path='./frames', frame_rate=4, t=1)
 
-    # Dummy camera matrices
-    P1 = np.array([[5.010e+03, 0.000e+00, 3.600e+02, 0.000e+00],
-               [0.000e+00, 5.010e+03, 6.400e+02, 0.000e+00],
-               [0.000e+00, 0.000e+00, 1.000e+00, 0.000e+00]])
+    # Dummy camera intrinsic parameters
+    image_width = video_processor.frame_width
+    image_height = video_processor.frame_height
+    fov = 94.0  # field of view in degrees (114 for my camera) 94 degrees for dji phantom 4 footage
+    focal_length = (image_width / 2) / np.tan(np.deg2rad(fov / 2))
+    cx = image_width / 2
+    cy = image_height / 2
 
-    P2 = np.array([[5.037e+03, -9.611e+01, -1.756e+03, 4.284e+03],
-                   [2.148e+02,  5.354e+03,  1.918e+02, 8.945e+02],
-                   [3.925e-01,  7.092e-02,  9.169e-01, 4.930e-01]])
+    # Camera intrinsic matrix
+    K = np.array([
+        [focal_length, 0, cx],
+        [0, focal_length, cy],
+        [0, 0, 1]
+    ]) 
     
     # Convert video to frames
-    video_processor = VideoProcessor(video_path='./videos/horizontal_test.mp4', frames_path='./frames', frame_rate=3, t=1)
     # Or load frames from directory
     #video_processor = VideoProcessor(video_path='./videos/vid1.mp4', frames_path='./frames', frame_rate=1, t=1, load_frames=True)
 
@@ -70,8 +78,7 @@ if __name__ == "__main__":
     #points3D = [item for sublist in points3D for item in sublist]
 
     # Move this to a util function
-    # Calculate baseline (This is maybe wrong or at least not very accurate, especially without calibration)
-    focal_length = P1[0, 0]  # Assuming both cameras have the same focal length
+    # Calculate baseline (This seems to be somewhat reasonable for the dji footage with the dummy camera parameters)
     # get baseline for all frames
     baseline_per_frame = []
     for idx in range(len(follower_frames)):
@@ -90,7 +97,7 @@ if __name__ == "__main__":
 
         # Get the translation vector from the relative pose between the two cameras
         try:
-            R, T = estimate_pose(follower_keypoints[idx], lead_keypoints[idx], matcher.matches[idx], focal_length=focal_length, principal_point=(P1[0, 2], P1[1, 2]))
+            R, T = estimate_pose(follower_keypoints[idx], lead_keypoints[idx], matcher.matches[idx], focal_length=focal_length, principal_point=(cx, cy))
         except:
             continue
         T = T / T[2]  # Normalize translation vector

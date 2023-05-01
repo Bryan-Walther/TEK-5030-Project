@@ -14,6 +14,9 @@ class VideoProcessor:
             self.frames = self.video_to_frames()
 
         self.follower_frames, self.lead_frames = self.split_frames()
+        self.frame_width = self.follower_frames[0].shape[1]
+        self.frame_height = self.follower_frames[0].shape[0]
+
 
     def video_to_frames(self) -> list:
         if not self.cap.isOpened():
