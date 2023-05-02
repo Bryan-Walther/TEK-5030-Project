@@ -141,15 +141,14 @@ if __name__ == "__main__":
     # Rectify images
     follower_keypoints, follower_descriptors, follower_frames = follower_extractor.get_params()
     lead_keypoints, lead_descriptors, lead_frames = lead_extractor.get_params()
+    f_mats, rectified_followers, rectified_lead, rectified_images = rectify_images_batch(follower_frames, lead_frames, follower_keypoints, lead_keypoints, matcher.matches)
+    show_frames(rectified_images)
 
     print("Calculating baseline for all frames without rectification\n")   
     baselines = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, focal_length, principal_point=(cx, cy))
 
     # Doing stereo rectification, re-matching and detecting features on rectified images, and calculating baseline.
     '''
-    f_mats, rectified_followers, rectified_lead, rectified_images = rectify_images_batch(follower_frames, lead_frames, follower_keypoints, lead_keypoints, matcher.matches)
-    show_frames(rectified_images)
-
     # Extract feats and match again on rectified images
     follower_extractor_rect = Extractor(rectified_followers)
     follower_extractor_rect.extract_features(descriptor_type=EXTRACTION_TYPE)
