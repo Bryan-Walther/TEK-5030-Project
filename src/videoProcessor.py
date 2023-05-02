@@ -2,12 +2,15 @@ import cv2
 import os
 
 class VideoProcessor:
-    def __init__(self, video_path, frames_path=None, frame_rate=1, t=1, load_frames=False, K=None, D=None):   
+    def __init__(self, video_path, frames_path=None, frame_rate=1, t=1, load_frames=False, K=None, D=None, movement_mode='parallel'):   
+        # Movement mode can be either 'parallel' or 'contra-parallel'. 
+        # Parallel means the cameras are moving in the same direction, contra-parallel means they are moving in opposite directions.
         self.video_path = video_path
         self.frames_path = frames_path
         self.frame_rate = frame_rate
         self.cap = cv2.VideoCapture(video_path)
         self.t = t
+        self.movement_mode = movement_mode
         if load_frames and frames_path:
             self.frames = self.load_frames()
         else:
@@ -93,20 +96,33 @@ class VideoProcessor:
             follower: array of frames that are t frames behind the lead camera
             lead: array of frames that are t frames ahead of the follower camera
         '''
+        # If movement mode is parallel, the follower camera is t frames behind the lead camera
+        # If movement mode is contra-parallel, the frames are just split in the middle, and the follower portion is reversed.
         num_frames = len(self.frames)
 
         follower = [] # This camera will be behind
         lead = [] # This camera will be ahead
 
-        for i in range(num_frames - self.t):
-            frame = self.frames[i]
-            if i < self.t:
-                follower.append(frame)
-            else:
-                lead.append(frame)
-                follower.append(frame)
+        if self.movement_mode == 'parallel':
+            for i in range(num_frames - self.t):
+                frame = self.frames[i]
+                if i < self.t:
+                    follower.append(frame)
+                else:
+                    lead.append(frame)
+                    follower.append(frame)
 
-        lead.extend(self.frames[-self.t:])
+            lead.extend(self.frames[-self.t:])
+        elif self.movement_mode == 'contra-parallel':
+            lead_idx = [i for i in range(num_frames // 2, num_frames, self.t)]
+            follower_idx = [i for i in range(0, num_frames//2, self.t)]
+
+            lead = [self.frames[i] for i in lead_idx]
+            follower = [self.frames[i] for i in follower_idx][::-1]
+        else:
+            print("Invalid movement mode. Must be either 'parallel' or 'contra-parallel'")
+            exit(1)
+
         return follower, lead
 
     # Iterate through the follower and lead frames side by side

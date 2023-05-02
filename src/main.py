@@ -19,11 +19,18 @@ def filter_estimates(baseline_estimates):
     baseline_mean = np.mean(inliers)
 
     return baseline_mean
-
-# This doesn't actually calculate the baseline, the formula is wrong.
-# But for this to work, we would need the depth of the correspondences which we don't have.
+'''
+About estimating the scale of the baseline(distance between cameras):
+    This function doesn't actually calculate the baseline, the formula is wrong.
+    This just calculates the disparity between the two cameras for all the points.
+    It then takes the average of the disparities and returns that.
+    Calculating the baseline using the correct formula requires us to know the depth of the points, and to estimate the depth using stereo, we need to know the baseline.
+    Therefore, estimating the baseline this way does not seem possible, not sure.
+    We could maybe use RGBD cameras? That way we would have the depth for each pixel, and we could directly calculate the baseline with the correct formula.
+'''
 def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K, focal_length, principal_point):
     baseline_per_frame = []
+    normalized_pose_per_frame = []
     for idx in range(len(rectified_followers)):
         displacements = []
         
@@ -50,21 +57,20 @@ def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K,
         except:
             print('Could not estimate pose for frame {}'.format(idx))
             continue
-        T = T / T[2]  # Normalize translation vector
-        T = T.reshape((3, 1))
 
         # Calculate baseline using the magnitude of the translation vector
-        baseline = (focal_length * mean_disparity) / np.linalg.norm(T)
+        baseline = (focal_length * mean_disparity)
         # Actual baseline is (depth * disparity) / focal_length but we don't have depth
-        baseline_filtered = (focal_length * mean_disparity_filtered) / np.linalg.norm(T)
-        baseline_per_frame.append(baseline)
+        baseline_filtered = (focal_length * mean_disparity_filtered) 
+        baseline_per_frame.append(baseline_filtered)
+        normalized_pose_per_frame.append((R, T))
         # round baseline to 3 decimal places
         print("Baseline for time {} is {} ".format(idx, round(baseline / 1000, 3)))
         print("Baseline for time {} is {}  (FILTERED)".format(idx, round(baseline_filtered / 1000, 3)))
+        print("Translation vector for time {} is {}".format(idx, T.T))
         print("\n")
 
-    return baseline_per_frame
-
+    return baseline_per_frame, normalized_pose_per_frame
 
 if __name__ == "__main__":
     '''
@@ -93,9 +99,11 @@ if __name__ == "__main__":
     EXTRACTION_TYPE = 'SIFT'
     MATCHER_TYPE = 'bf'
     RATIOTHRESH = 0.59 # Not used anymore, but keeping it here just in case.
+    t = 1 # Time step offset between the two cameras
+    frame_rate = 10 
 
     # Convert video to frames
-    video_processor = VideoProcessor(video_path='./videos/dji_vid4.mp4', frames_path='./frames', frame_rate=4, t=1)
+    video_processor = VideoProcessor(video_path='./videos/dji_vid2.mp4', frames_path='./frames', frame_rate=frame_rate, t=t, movement_mode='parallel')
     # Or load frames from directory
     #video_processor = VideoProcessor(video_path='./videos/vid1.mp4', frames_path='./frames', frame_rate=1, t=1, load_frames=True)
 
@@ -146,13 +154,12 @@ if __name__ == "__main__":
     f_mats, rectified_followers, rectified_lead, rectified_images = rectify_images_batch(follower_frames, lead_frames, follower_keypoints, lead_keypoints, matcher.matches)
     show_frames(rectified_images)
 
-    #PnP estimation
-
-
     print("Calculating baseline for all frames without rectification\n")   
-    baselines = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, focal_length, principal_point=(cx, cy))
+    baselines, _ = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, focal_length, principal_point=(cx, cy))
 
-    # Doing stereo rectification, re-matching and detecting features on rectified images, and calculating baseline.
+    print(f'Mean baseline for t={t} is {round(np.mean(baselines) / 1000, 3)}')
+
+    # Doing stereo rectification, re-matching and detecting features on rectified images, and calculating "baseline".
     '''
     # Extract feats and match again on rectified images
     follower_extractor_rect = Extractor(rectified_followers)
