@@ -20,6 +20,8 @@ def filter_estimates(baseline_estimates):
 
     return baseline_mean
 
+# This doesn't actually calculate the baseline, the formula is wrong.
+# But for this to work, we would need the depth of the correspondences which we don't have.
 def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K, focal_length, principal_point):
     baseline_per_frame = []
     for idx in range(len(rectified_followers)):
@@ -53,12 +55,12 @@ def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K,
 
         # Calculate baseline using the magnitude of the translation vector
         baseline = (focal_length * mean_disparity) / np.linalg.norm(T)
+        # Actual baseline is (depth * disparity) / focal_length but we don't have depth
         baseline_filtered = (focal_length * mean_disparity_filtered) / np.linalg.norm(T)
         baseline_per_frame.append(baseline)
-        # Print baseline from mm to meters
         # round baseline to 3 decimal places
-        print("Baseline for time {} is {} meters".format(idx, round(baseline / 1000, 3)))
-        print("Baseline for time {} is {} meters (FILTERED)".format(idx, round(baseline_filtered / 1000, 3)))
+        print("Baseline for time {} is {} ".format(idx, round(baseline / 1000, 3)))
+        print("Baseline for time {} is {}  (FILTERED)".format(idx, round(baseline_filtered / 1000, 3)))
         print("\n")
 
     return baseline_per_frame
@@ -143,6 +145,9 @@ if __name__ == "__main__":
     lead_keypoints, lead_descriptors, lead_frames = lead_extractor.get_params()
     f_mats, rectified_followers, rectified_lead, rectified_images = rectify_images_batch(follower_frames, lead_frames, follower_keypoints, lead_keypoints, matcher.matches)
     show_frames(rectified_images)
+
+    #PnP estimation
+
 
     print("Calculating baseline for all frames without rectification\n")   
     baselines = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, focal_length, principal_point=(cx, cy))
