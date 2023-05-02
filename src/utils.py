@@ -106,20 +106,21 @@ def rectify_images(img1, img2, kp1, kp2, matches):
     img_draw = np.hstack((img5_rect, img3_rect))
     img_draw = cv2.resize(img_draw, (img_draw.shape[1]//2, img_draw.shape[0]//2))
 
-    return img1_rectified, img2_rectified, img_draw
+    return F, img1_rectified, img2_rectified, img_draw
 
 def rectify_images_batch(follower_imgs, lead_imgs, follower_kp, lead_kp, matches):
-    follower_rectified, lead_rectified, epipolar_imgs = [], [], []
+    f_mats, follower_rectified, lead_rectified, epipolar_imgs = [], [], [], []
     for i in range(len(follower_imgs)):
         try:
-            follower_rect, lead_rect, epipolar_img = rectify_images(follower_imgs[i], lead_imgs[i], follower_kp[i], lead_kp[i], matches[i])
+            F, follower_rect, lead_rect, epipolar_img = rectify_images(follower_imgs[i], lead_imgs[i], follower_kp[i], lead_kp[i], matches[i])
             follower_rectified.append(follower_rect)
             lead_rectified.append(lead_rect)
             epipolar_imgs.append(epipolar_img)
+            f_mats.append(F)
         except:
             print("Error rectifying images")
             continue
-    return follower_rectified, lead_rectified, epipolar_imgs
+    return f_mats, follower_rectified, lead_rectified, epipolar_imgs
 
 def drawlines(img1src, img2src, lines, pts1src, pts2src):
     ''' img1 - image on which we draw the epilines for the points in img2
