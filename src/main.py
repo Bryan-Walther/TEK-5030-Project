@@ -205,8 +205,4 @@ if __name__ == "__main__":
     #points3D = triangulate_points_batch(follower_keypoints, lead_keypoints, matcher.matches, cameraMatrix1=P1, cameraMatrix2=P2)
     # Flatten list of lists
     #points3D = [item for sublist in points3D for item in sublist]
-
-    # Move this to a util.py as a function
-    # Calculate baseline (This is not correct)
-    # get baseline for all frames
     '''
