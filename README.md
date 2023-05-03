@@ -30,7 +30,7 @@ The problem is that for stereo imaging, it seems we need to know the baseline to
 
 So the next step would be to find a way to estimate the depth, so that we can use this formula to estimate the baseline.
 One possible approach could be using monocular depth estimation, where we use a CNN to estimate the depth map per frame.
-An implementation of this can be seen in `DepthEstimator`, which loads as pre-trained MiDaS model that outputs the estimated depth map.
+An implementation of this can be seen in `DepthEstimator`, which loads a pre-trained MiDaS model that outputs the estimated depth map.
 One problem with this is that its slow if we don't use GPU, however with GPU it could be used real time.
 Another issue is that it only estimates relative depth, so we won't get anything in meters.
 This could still give us a usable relative distance between the cameras, but up to some unknown scale.
