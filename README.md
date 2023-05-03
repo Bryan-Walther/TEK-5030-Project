@@ -50,10 +50,10 @@ To use the script, you need to provide the following inputs:
 Here is an example of how to use the script:
 
 ```python
-from videoProcessor import VideoProcessor
-from extractor import Extractor
-from matcher import Matcher
-from DepthEstimation import DepthEstimator
+from VideoProcessor import VideoProcessor
+from Extractor import Extractor
+from Matcher import Matcher
+from depthEstimator import DepthEstimator
 
 EXTRACTION_TYPE = 'SIFT'
 MATCHER_TYPE = 'bf'

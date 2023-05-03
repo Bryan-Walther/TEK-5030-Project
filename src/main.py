@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from videoProcessor import VideoProcessor
 from extractor import Extractor
 from matcher import Matcher
-from DepthEstimation import DepthEstimator
+from depthEstimation import DepthEstimator
 
 def filter_estimates(baseline_estimates):
     baseline_estimates = np.array(baseline_estimates)
