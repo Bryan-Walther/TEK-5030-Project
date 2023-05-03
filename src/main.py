@@ -1,10 +1,13 @@
 import cv2
 import numpy as np
 from utils import *
+from scipy.stats import iqr
+import matplotlib.pyplot as plt
+
 from videoProcessor import VideoProcessor
 from extractor import Extractor
 from matcher import Matcher
-from scipy.stats import iqr
+from DepthEstimation import DepthEstimator
 
 def filter_estimates(baseline_estimates):
     baseline_estimates = np.array(baseline_estimates)
@@ -53,6 +56,7 @@ def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K,
 
         # Get the translation vector from the relative pose between the two cameras
         try:
+            # Pose of the lead camera relative to the follower camera (...I think, might be the other way around)
             R, T = estimate_pose(follower_keypoints[idx], lead_keypoints[idx], matches[idx], K, focal_length, principal_point=(cx, cy))
         except:
             print('Could not estimate pose for frame {}'.format(idx))
@@ -100,10 +104,10 @@ if __name__ == "__main__":
     MATCHER_TYPE = 'bf'
     RATIOTHRESH = 0.59 # Not used anymore, but keeping it here just in case.
     t = 1 # Time step offset between the two cameras
-    frame_rate = 10 
+    frame_rate = 4 
 
     # Convert video to frames
-    video_processor = VideoProcessor(video_path='./videos/dji_vid2.mp4', frames_path='./frames', frame_rate=frame_rate, t=t, movement_mode='parallel')
+    video_processor = VideoProcessor(video_path='./videos/dji_vid4.mp4', frames_path='./frames', frame_rate=frame_rate, t=t, movement_mode='parallel')
     # Or load frames from directory
     #video_processor = VideoProcessor(video_path='./videos/vid1.mp4', frames_path='./frames', frame_rate=1, t=1, load_frames=True)
 
@@ -158,6 +162,21 @@ if __name__ == "__main__":
     baselines, _ = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, focal_length, principal_point=(cx, cy))
 
     print(f'Mean baseline for t={t} is {round(np.mean(baselines) / 1000, 3)}')
+
+    # Estimate Depth using a CNN from DepthEstimator.py, may or may not be useful.
+    '''
+    follower_depth_estimator = DepthEstimator()
+    lead_depth_estimator = DepthEstimator()
+    # Load images
+    follower_depth_estimator.load_images_from_array(follower_frames)
+    lead_depth_estimator.load_images_from_array(lead_frames)
+    # Predict batch of images
+    follower_depths = follower_depth_estimator.predict_depth()
+    lead_depths = lead_depth_estimator.predict_depth()
+    # Show depth maps
+    plt.imshow(follower_depths[0])
+    plt.show()
+    '''
 
     # Doing stereo rectification, re-matching and detecting features on rectified images, and calculating "baseline".
     '''
