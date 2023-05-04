@@ -22,34 +22,28 @@ def filter_estimates(baseline_estimates):
     baseline_mean = np.mean(inliers)
 
     return baseline_mean
-'''
-About estimating the scale of the baseline(distance between cameras):
-    This function doesn't actually calculate the baseline, the formula is wrong.
-    This just calculates the disparity between the two cameras for all the points.
-    It then takes the average of the disparities and returns that.
-    Calculating the baseline using the correct formula requires us to know the depth of the points, and to estimate the depth using stereo, we need to know the baseline.
-    Therefore, estimating the baseline this way does not seem possible, not sure.
-    We could maybe use RGBD cameras? That way we would have the depth for each pixel, and we could directly calculate the baseline with the correct formula.
-'''
-def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K, focal_length, principal_point):
+
+def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K, focal_length, principal_point, depth_maps):
     baseline_per_frame = []
     normalized_pose_per_frame = []
     for idx in range(len(follower_keypoints)):
-        displacements = []
+        baselines = []
+        follower_depth_map = depth_maps[idx]
         
         # Calculate the disparity of the matched features between the two cameras
         for m in matches[idx]:
             x1, y1 = follower_keypoints[idx][m.queryIdx].pt
             x2, y2 = lead_keypoints[idx][m.trainIdx].pt
-            disparity = abs(x2 - x1)
-            displacements.append(disparity)
 
-        # Use the median or mean of the displacements as the baseline?
-        # median is probably more robust to outliers
-        #mean_disparity = np.median(displacements)
+            disparity = abs(x2 - x1)
+            if disparity == 0:
+               continue
+            depth = follower_depth_map[int(y1), int(x1)]
+            baseline = (depth * focal_length) / disparity
+            baselines.append(baseline)
         try:
-            mean_disparity = np.mean(displacements)
-            mean_disparity_filtered = filter_estimates(displacements)
+            mean_baseline = np.mean(baselines)
+            mean_baseline_filtered = filter_estimates(baselines)
         except:
             print('Could not calculate disparity for frame {}'.format(idx))
             continue
@@ -63,14 +57,14 @@ def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K,
             continue
 
         # Calculate baseline using the magnitude of the translation vector
-        baseline = (focal_length * mean_disparity)
+        baseline = mean_baseline
         # Actual baseline is (depth * disparity) / focal_length but we don't have depth
-        baseline_filtered = (focal_length * mean_disparity_filtered) 
+        baseline_filtered = mean_baseline_filtered
         baseline_per_frame.append(baseline_filtered)
         normalized_pose_per_frame.append((R, T))
         # round baseline to 3 decimal places
-        print("Baseline for time {} is {} ".format(idx, round(baseline / 1000, 3)))
-        print("Baseline for time {} is {}  (FILTERED)".format(idx, round(baseline_filtered / 1000, 3)))
+        print("Baseline for time {} is {} ".format(idx, baseline))
+        print("Baseline for time {} is {}  (FILTERED)".format(idx, baseline_filtered))
         print("Translation vector for time {} is {}".format(idx, T.T))
         print("\n")
 
@@ -104,15 +98,19 @@ if __name__ == "__main__":
     MATCHER_TYPE = 'bf'
     RATIOTHRESH = 0.59 # Not used anymore, but keeping it here just in case.
     t = 1 # Time step offset between the two cameras
-    frame_rate = 4 
+    frame_rate = 1 
 
     # Convert video to frames
-    video_processor = VideoProcessor(video_path='./videos/dji_vid4.mp4', frames_path='./frames', frame_rate=frame_rate, t=t, movement_mode='parallel')
+    video_processor = VideoProcessor(video_path='./videos/dji_vid3.mp4', frames_path='./frames', frame_rate=frame_rate, t=t, movement_mode='parallel')
     # Or load frames from directory
     #video_processor = VideoProcessor(video_path='./videos/vid1.mp4', frames_path='./frames', frame_rate=1, t=1, load_frames=True)
 
+    # Load depth estimator model and the frames to estimate depth from
+    follower_depth_estimator = DepthEstimator(model_type='MiDaS_small') # DPT_Large, MiDaS_small
+    follower_depth_estimator.load_images_from_array(video_processor.follower_frames) # Load first frame for testing
+
     # Show follower and lead frames side by side
-    #video_processor.show_split_frames()
+    video_processor.show_split_frames()
 
     # Dummy camera intrinsic parameters
     image_width = video_processor.frame_width
@@ -150,33 +148,25 @@ if __name__ == "__main__":
 
     # Visualize matches
     match_images = matcher.visualize_matches()
-    show_frames(match_images)
+    #show_frames(match_images)
 
     # Rectify images
     follower_keypoints, follower_descriptors, follower_frames = follower_extractor.get_params()
     lead_keypoints, lead_descriptors, lead_frames = lead_extractor.get_params()
     f_mats, rectified_followers, rectified_lead, rectified_images = rectify_images_batch(follower_frames, lead_frames, follower_keypoints, lead_keypoints, matcher.matches)
-    show_frames(rectified_images)
+    #show_frames(rectified_images)
+    
+    # Predict depth for each follower frame
+    follower_depths = follower_depth_estimator.predict_depth()
+    for i,depth in enumerate(follower_depths):
+        # Check if we have "inf" values for each depth map
+        if np.any(np.isinf(depth)):
+            print(f"Depth map {i} contains inf values")
 
     print("Calculating baseline for all frames without rectification\n")   
-    baselines, _ = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, focal_length, principal_point=(cx, cy))
+    baselines, _ = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, focal_length, principal_point=(cx, cy), depth_maps=follower_depths)
 
-    print(f'Mean baseline for t={t} is {round(np.mean(baselines) / 1000, 3)}')
-
-    # Estimate Depth using a CNN from DepthEstimator.py, may or may not be useful.
-    '''
-    # Load the model (No need to do this twice, will have to refactor this later)
-    follower_depth_estimator = DepthEstimator(model_type='DPT_Large') # DPT_Large, MiDaS_small
-    lead_depth_estimator = DepthEstimator()
-    follower_depth_estimator.load_images_from_array([follower_frames[0]]) # Load first frame for testing
-    lead_depth_estimator.load_images_from_array([lead_frames[0]]) # Load first frame for testing
-    # Predict batch of images
-    follower_depths = follower_depth_estimator.predict_depth()
-    lead_depths = lead_depth_estimator.predict_depth()
-    # Show depth maps
-    plt.imshow(follower_depths[0])
-    plt.show()
-    '''
+    print(f'Mean baseline for t={t} is {np.mean(baselines)}')
 
     # Doing stereo rectification, re-matching and detecting features on rectified images, and calculating "baseline".
     '''

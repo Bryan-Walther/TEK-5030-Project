@@ -57,10 +57,10 @@ class DepthEstimator:
                     mode="bicubic",
                     align_corners=False,
                 ).squeeze()
-            result.append(self.inv_depth_to_depth(prediction.numpy()))
+            result.append(.inv_depth_to_depth(prediction.numpy()))
         self.depth_maps = result
         return result
 
     def inv_depth_to_depth(self, inv_map):
-        return 1 / inv_map
+        return 1 / (inv_map + 1e-6) # add small epsilon to avoid division by zero
 
