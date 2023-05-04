@@ -34,7 +34,7 @@ About estimating the scale of the baseline(distance between cameras):
 def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K, focal_length, principal_point):
     baseline_per_frame = []
     normalized_pose_per_frame = []
-    for idx in range(len(rectified_followers)):
+    for idx in range(len(follower_keypoints)):
         displacements = []
         
         # Calculate the disparity of the matched features between the two cameras
@@ -143,7 +143,7 @@ if __name__ == "__main__":
     lead_extractor.extract_features(descriptor_type=EXTRACTION_TYPE)
 
     # Use this to visualize the features
-    show_features_split(follower_extractor.draw_keypoints(), lead_extractor.draw_keypoints())
+    #show_features_split(follower_extractor.draw_keypoints(), lead_extractor.draw_keypoints())
 
     matcher = Matcher(follower_extractor, lead_extractor, RANSAC=True)
     matcher.match_features(matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
@@ -165,21 +165,20 @@ if __name__ == "__main__":
 
     # Estimate Depth using a CNN from DepthEstimator.py, may or may not be useful.
     '''
-    follower_depth_estimator = DepthEstimator()
+    # Load the model (No need to do this twice, will have to refactor this later)
+    follower_depth_estimator = DepthEstimator(model_type='DPT_Large') # DPT_Large, MiDaS_small
     lead_depth_estimator = DepthEstimator()
-    # Load images
-    follower_depth_estimator.load_images_from_array(follower_frames)
-    lead_depth_estimator.load_images_from_array(lead_frames)
+    follower_depth_estimator.load_images_from_array([follower_frames[0]]) # Load first frame for testing
+    lead_depth_estimator.load_images_from_array([lead_frames[0]]) # Load first frame for testing
     # Predict batch of images
     follower_depths = follower_depth_estimator.predict_depth()
     lead_depths = lead_depth_estimator.predict_depth()
     # Show depth maps
     plt.imshow(follower_depths[0])
     plt.show()
-
-    # Doing stereo rectification, re-matching and detecting features on rectified images, and calculating "baseline".
     '''
 
+    # Doing stereo rectification, re-matching and detecting features on rectified images, and calculating "baseline".
     '''
     # Extract feats and match again on rectified images
     follower_extractor_rect = Extractor(rectified_followers)
