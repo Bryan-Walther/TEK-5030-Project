@@ -23,7 +23,7 @@ def filter_estimates(baseline_estimates):
 
     return baseline_mean
 
-def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K, focal_length, principal_point, depth_maps):
+def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K, focal_length, principal_point, depth_maps, scale_factor=1):
     baseline_per_frame = []
     normalized_pose_per_frame = []
     for idx in range(len(follower_keypoints)):
@@ -39,11 +39,11 @@ def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K,
             if disparity == 0:
                continue
             depth = follower_depth_map[int(y1), int(x1)]
-            baseline = (depth * focal_length) / disparity
+            baseline = (depth * disparity) / focal_length
             baselines.append(baseline)
         try:
             mean_baseline = np.mean(baselines)
-            mean_baseline_filtered = filter_estimates(baselines)
+            #mean_baseline_filtered = filter_estimates(baselines)
         except:
             print('Could not calculate disparity for frame {}'.format(idx))
             continue
@@ -59,12 +59,12 @@ def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K,
         # Calculate baseline using the magnitude of the translation vector
         baseline = mean_baseline
         # Actual baseline is (depth * disparity) / focal_length but we don't have depth
-        baseline_filtered = mean_baseline_filtered
-        baseline_per_frame.append(baseline_filtered)
+        #baseline_filtered = mean_baseline_filtered
+        baseline_per_frame.append(baseline)
         normalized_pose_per_frame.append((R, T))
         # round baseline to 3 decimal places
-        print("Baseline for time {} is {} ".format(idx, baseline))
-        print("Baseline for time {} is {}  (FILTERED)".format(idx, baseline_filtered))
+        print("Baseline for time {} is {} ".format(idx, baseline * scale_factor))
+        #print("Baseline for time {} is {}  (FILTERED)".format(idx, baseline_filtered * scale_factor))
         print("Translation vector for time {} is {}".format(idx, T.T))
         print("\n")
 
@@ -76,41 +76,33 @@ if __name__ == "__main__":
         - SIFT is a better than ORB, takes longer though.
         - Apparently, SURF is patented and no longer free to use.
         - Filtering with RANSAC improves the matching a lot.
-        - Don't think the baseline calculation is correct, its not calculating that, but still seems to be a good measure of relative distance.
-        - The "baseline" calculation seems somewhat resonable if we at least know the fov of the camera and have good features.
-            This seems to be the case with the dji drone video "dji_vid" using the correct fov of 94, as well as the image dimensions to set the principle point in the center.
-        - The "baseline" estimations seem more consistent when skipping ransac filtering on the matches, but filtering the baseline estimates instead.
-             Might be because RANSAC also removes a lot of false negatives, and without it, we get 10 times more estimates to work with which we can then filter.
-             Hard to say if these values are more accurate though without ground truth.
-        - RANSAC wasn't the problem, it was Lowe's ratio test. Removing it and keeping RANSAC gives way better results.
-            The baseline estimates are now very consistent, even without filtering.
 
     TODO:
         - Write a camera calibration function to get the intrinsic parameters. (maybe not necessary)
         - Try to write a function to help visualize the poses, maybe having a third window with overlaid poses?
         - Writing a bunch of visualization functions will probably help for the report.
         - Rectify the images with respect to the calibrated camera parameters.
-        - Do the baseline estimation with the rectified points.
-        - Depending on the results, we might want to try bundle adjustment to improve things further.
+        - Do the baseline estimation with the stereo-rectified images and see if it improves the results.
         - (maybe, hopefully not) try to set up some simulation.
     '''
     EXTRACTION_TYPE = 'SIFT'
+    SCALE_FACTOR = 10000 # Scale to multiply the predicted depth with. If we calibrate with some object of known size in the scene, we can extract the scale and get depth in meters.
     MATCHER_TYPE = 'bf'
     RATIOTHRESH = 0.59 # Not used anymore, but keeping it here just in case.
     t = 1 # Time step offset between the two cameras
-    frame_rate = 1 
+    frame_rate = 5 
 
     # Convert video to frames
-    video_processor = VideoProcessor(video_path='./videos/dji_vid3.mp4', frames_path='./frames', frame_rate=frame_rate, t=t, movement_mode='parallel')
+    video_processor = VideoProcessor(video_path='./videos/dji_vid4.mp4', frames_path='./frames', frame_rate=frame_rate, t=t, movement_mode='parallel')
     # Or load frames from directory
     #video_processor = VideoProcessor(video_path='./videos/vid1.mp4', frames_path='./frames', frame_rate=1, t=1, load_frames=True)
 
     # Load depth estimator model and the frames to estimate depth from
-    follower_depth_estimator = DepthEstimator(model_type='MiDaS_small') # DPT_Large, MiDaS_small
+    follower_depth_estimator = DepthEstimator(model_type='MiDaS_small') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
     follower_depth_estimator.load_images_from_array(video_processor.follower_frames) # Load first frame for testing
 
     # Show follower and lead frames side by side
-    video_processor.show_split_frames()
+    #video_processor.show_split_frames()
 
     # Dummy camera intrinsic parameters
     image_width = video_processor.frame_width
@@ -148,7 +140,7 @@ if __name__ == "__main__":
 
     # Visualize matches
     match_images = matcher.visualize_matches()
-    #show_frames(match_images)
+    show_frames(match_images)
 
     # Rectify images
     follower_keypoints, follower_descriptors, follower_frames = follower_extractor.get_params()
@@ -158,15 +150,12 @@ if __name__ == "__main__":
     
     # Predict depth for each follower frame
     follower_depths = follower_depth_estimator.predict_depth()
-    for i,depth in enumerate(follower_depths):
-        # Check if we have "inf" values for each depth map
-        if np.any(np.isinf(depth)):
-            print(f"Depth map {i} contains inf values")
 
     print("Calculating baseline for all frames without rectification\n")   
-    baselines, _ = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, focal_length, principal_point=(cx, cy), depth_maps=follower_depths)
+    baselines, _ = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, 
+                                     focal_length, principal_point=(cx, cy), depth_maps=follower_depths, scale_factor=SCALE_FACTOR)
 
-    print(f'Mean baseline for t={t} is {np.mean(baselines)}')
+    print(f'Mean baseline for t={t} is {np.mean(baselines)*SCALE_FACTOR}')
 
     # Doing stereo rectification, re-matching and detecting features on rectified images, and calculating "baseline".
     '''
