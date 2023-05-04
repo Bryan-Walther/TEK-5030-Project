@@ -2,13 +2,14 @@ import cv2
 import os
 
 class VideoProcessor:
-    def __init__(self, video_path, frames_path=None, frame_rate=1, t=1, load_frames=False, K=None, D=None, movement_mode='parallel'):   
+    def __init__(self, video_path=None, frames_path=None, frame_rate=1, t=1, load_frames=False, K=None, D=None, movement_mode='parallel'):   
         # Movement mode can be either 'parallel' or 'contra-parallel'. 
         # Parallel means the cameras are moving in the same direction, contra-parallel means they are moving in opposite directions.
         self.video_path = video_path
         self.frames_path = frames_path
         self.frame_rate = frame_rate
-        self.cap = cv2.VideoCapture(video_path)
+        if video_path:
+            self.cap = cv2.VideoCapture(video_path)
         self.t = t
         self.movement_mode = movement_mode
         if load_frames and frames_path:

@@ -9,66 +9,6 @@ from extractor import Extractor
 from matcher import Matcher
 from depthEstimation import DepthEstimator
 
-def filter_estimates(baseline_estimates):
-    baseline_estimates = np.array(baseline_estimates)
-
-    median = np.median(baseline_estimates)
-    q1, q3 = np.percentile(baseline_estimates, [25, 75])
-    iqr = q3 - q1
-
-    threshold = 1.5 * iqr
-    inliers = baseline_estimates[np.abs(baseline_estimates - median) < threshold]
-    print("Inliers: ", len(inliers))
-    baseline_mean = np.mean(inliers)
-
-    return baseline_mean
-
-def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K, focal_length, principal_point, depth_maps, scale_factor=1):
-    baseline_per_frame = []
-    normalized_pose_per_frame = []
-    for idx in range(len(follower_keypoints)):
-        baselines = []
-        follower_depth_map = depth_maps[idx]
-        
-        # Calculate the disparity of the matched features between the two cameras
-        for m in matches[idx]:
-            x1, y1 = follower_keypoints[idx][m.queryIdx].pt
-            x2, y2 = lead_keypoints[idx][m.trainIdx].pt
-
-            disparity = abs(x2 - x1)
-            if disparity == 0:
-               continue
-            depth = follower_depth_map[int(y1), int(x1)]
-            baseline = (depth * disparity) / focal_length
-            baselines.append(baseline)
-        try:
-            mean_baseline = np.mean(baselines)
-            mean_baseline_filtered = filter_estimates(baselines)
-        except:
-            print('Could not calculate disparity for frame {}'.format(idx))
-            continue
-
-        # Get the translation vector from the relative pose between the two cameras
-        try:
-            # Pose of the lead camera relative to the follower camera (...I think, might be the other way around)
-            R, T = estimate_pose(follower_keypoints[idx], lead_keypoints[idx], matches[idx], K, focal_length, principal_point=(cx, cy))
-        except:
-            print('Could not estimate pose for frame {}'.format(idx))
-            continue
-
-        baseline = mean_baseline
-
-        baseline_filtered = mean_baseline_filtered
-        baseline_per_frame.append(baseline_filtered)
-        normalized_pose_per_frame.append((R, T))
-
-        print("Baseline for time {} is {} ".format(idx, baseline * scale_factor))
-        print("Baseline for time {} is {}  (FILTERED)".format(idx, baseline_filtered * scale_factor))
-        print("Translation vector for time {} is {}".format(idx, T.T))
-        print("\n")
-
-    return baseline_per_frame, normalized_pose_per_frame
-
 if __name__ == "__main__":
     '''
     Observations:
@@ -93,6 +33,11 @@ if __name__ == "__main__":
 
     # Convert video to frames
     video_processor = VideoProcessor(video_path='./videos/dji_vid4.mp4', frames_path='./frames', frame_rate=frame_rate, t=t, movement_mode='parallel')
+    '''
+    video_processor.follower_frames = [video_processor.follower_frames[0]] * len(video_processor.lead_frames)*2
+    # Add lead frames reversed at the end of lead frames
+    video_processor.lead_frames = video_processor.lead_frames + video_processor.lead_frames[::-1]
+    '''
     # Or load frames from directory
     #video_processor = VideoProcessor(video_path='./videos/vid1.mp4', frames_path='./frames', frame_rate=1, t=1, load_frames=True)
 
@@ -150,16 +95,16 @@ if __name__ == "__main__":
     # Predict depth for each follower frame
     follower_depths = follower_depth_estimator.predict_depth()
 
+    '''
     # Show the depth maps
     for depth_map in follower_depths:
         plt.figure()
         plt.imshow(depth_map)
         plt.show()
+    '''
 
     print("Calculating baseline for all frames without rectification\n")   
-    baselines, _ = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, 
-                                     focal_length, principal_point=(cx, cy), depth_maps=follower_depths, scale_factor=SCALE_FACTOR)
-
+    baselines, _ = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, focal_length, principal_point=(cx, cy), depth_maps=follower_depths, scale_factor=SCALE_FACTOR)
     print(f'Mean baseline for t={t} is {np.mean(baselines)*SCALE_FACTOR}')
 
     # Doing stereo rectification, re-matching and detecting features on rectified images, and calculating "baseline".

@@ -50,7 +50,7 @@ class DepthEstimator:
             img = self.input_batch[i]
             inp = self.transform(img)
             with torch.no_grad():
-                prediction = self.midas(inp)
+                prediction = self.midas(inp.to(self.device))
                 prediction = torch.nn.functional.interpolate(
                     prediction.unsqueeze(1),
                     size=img.shape[:2],

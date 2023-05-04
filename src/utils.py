@@ -189,3 +189,59 @@ def triangulate_points_batch(follower_kp, lead_kp, matches, cameraMatrix1=None, 
     for i in range(len(follower_kp)):
         points3D.append(triangulate_points(follower_kp[i], lead_kp[i], matches[i], cameraMatrix1, cameraMatrix2))
     return points3D
+
+def filter_estimates(baseline_estimates):
+    baseline_estimates = np.array(baseline_estimates)
+
+    median = np.median(baseline_estimates)
+    q1, q3 = np.percentile(baseline_estimates, [25, 75])
+    iqr = q3 - q1
+
+    threshold = 1.5 * iqr
+    inliers = baseline_estimates[np.abs(baseline_estimates - median) < threshold]
+    print("Inliers: ", len(inliers))
+    baseline_mean = np.mean(inliers)
+
+    return baseline_mean
+
+def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K, focal_length, principal_point, depth_maps, scale_factor=1):
+    baseline_per_frame = []
+    normalized_pose_per_frame = []
+    for idx in range(len(follower_keypoints)):
+        baselines = []
+        follower_depth_map = depth_maps[idx]
+
+        # Calculate the disparity of the matched features between the two cameras
+        for m in matches[idx]:
+            x1, y1 = follower_keypoints[idx][m.queryIdx].pt
+            x2, y2 = lead_keypoints[idx][m.trainIdx].pt
+
+            disparity = abs(x2 - x1)
+            if disparity == 0:
+               continue
+            depth = follower_depth_map[int(y1), int(x1)]
+            baseline = (depth * disparity) / focal_length
+            baselines.append(baseline)
+        try:
+            mean_baseline = np.mean(baselines)
+            mean_baseline_filtered = filter_estimates(baselines)
+        except:
+            print('Could not calculate disparity for frame {}'.format(idx))
+            continue
+
+        # Get the translation vector from the relative pose between the two cameras
+        # Pose of the lead camera relative to the follower camera (...I think, might be the other way around)
+        R, T = estimate_pose(follower_keypoints[idx], lead_keypoints[idx], matches[idx], K, focal_length, principal_point=principal_point)
+
+        baseline = mean_baseline
+
+        baseline_filtered = mean_baseline_filtered
+        baseline_per_frame.append(baseline_filtered)
+        normalized_pose_per_frame.append((R, T))
+
+        print("Baseline for time {} is {} ".format(idx, baseline * scale_factor))
+        print("Baseline for time {} is {}  (FILTERED)".format(idx, baseline_filtered * scale_factor))
+        print("Translation vector for time {} is {}".format(idx, T.T))
+        print("\n")
+
+    return baseline_per_frame, normalized_pose_per_frame
