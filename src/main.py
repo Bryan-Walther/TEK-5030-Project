@@ -13,6 +13,8 @@ if __name__ == "__main__":
     '''
     Observations:
         - SIFT is a better than ORB, takes longer though.
+        - ORB is the fastest, can result in few matches.
+        - BRISK is somewhere in the middle in terms of performance and quality.
         - Apparently, SURF is patented and no longer free to use.
         - Filtering with RANSAC improves the matching a lot.
 
@@ -24,7 +26,7 @@ if __name__ == "__main__":
         - Do the baseline estimation with the stereo-rectified images and see if it improves the results.
         - (maybe, hopefully not) try to set up some simulation.
     '''
-    EXTRACTION_TYPE = 'SIFT'
+    EXTRACTION_TYPE = 'BRISK'
     SCALE_FACTOR = 10000 # Scale to multiply the predicted depth with. If we calibrate with some object of known size in the scene, we can extract the scale and get depth in meters.
     MATCHER_TYPE = 'bf'
     RATIOTHRESH = 0.59 # Not used anymore, but keeping it here just in case.
@@ -33,11 +35,13 @@ if __name__ == "__main__":
 
     # Convert video to frames
     video_processor = VideoProcessor(video_path='./videos/dji_vid4.mp4', frames_path='./frames', frame_rate=frame_rate, t=t, movement_mode='parallel')
+
     '''
     video_processor.follower_frames = [video_processor.follower_frames[0]] * len(video_processor.lead_frames)*2
     # Add lead frames reversed at the end of lead frames
     video_processor.lead_frames = video_processor.lead_frames + video_processor.lead_frames[::-1]
     '''
+
     # Or load frames from directory
     #video_processor = VideoProcessor(video_path='./videos/vid1.mp4', frames_path='./frames', frame_rate=1, t=1, load_frames=True)
 

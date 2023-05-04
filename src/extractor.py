@@ -15,6 +15,8 @@ class Extractor:
             feature_detector = cv2.xfeatures2d.SIFT_create()
         elif descriptor_type == 'SURF':
             feature_detector = cv2.xfeatures2d.SURF_create()
+        elif descriptor_type == 'BRISK':
+            feature_detector = cv2.BRISK_create()
 
         if isinstance(self.frames, list):
             self.keypoints, self.descriptors = [], []
