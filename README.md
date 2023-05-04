@@ -23,17 +23,13 @@ The script imports four submodules:
 There is also the `utils.py` file that has various utility functions for visualisation, pose estimation, image rectification, etc.
 
 # Current problems and what to do next
-The main issue is that the `estimate_baseline()` is mostly just a place holder and needs to be correctly implemented.
-This doesn't work for now because we don't have the depth of the features, which seems to be necessary to use the following equation: $${Z} = f\frac{b_x}{d} \rightarrow b_x = \frac{Zd}{f} $$
-Where Z is our depth, d is the disparity, f is the focal length, and b is the baseline(distance between the cameras).
-The problem is that for stereo imaging, it seems we need to know the baseline to estimate the depth, and vice versa.
+The baseline calculation function works properly now after estimating the depth per frame using a pre-trained CNN.
+Using the small version of the model seems to be good enough, and is a good bit faster than the large model, hopefully this is fast enough for real time without GPU.
+The baseline estimation seems robust enough, as long as we have a good set of features and matches.
+The less features we have, the more the estimates fall apart. 
 
-So the next step would be to find a way to estimate the depth, so that we can use this formula to estimate the baseline.
-One possible approach could be using monocular depth estimation, where we use a CNN to estimate the depth map per frame.
-An implementation of this can be seen in `DepthEstimator`, which loads a pre-trained MiDaS model that outputs the estimated depth map.
-One problem with this is that its slow if we don't use GPU, however with GPU it could be used real time.
-Another issue is that it only estimates relative depth, so we won't get anything in meters.
-This could still give us a usable relative distance between the cameras, but up to some unknown scale.
+The only things remaining now is to calibrate the camera if we don't already have the calibration parameters, and then undistort the images.
+Then we can adapt the code to work with a pair of camera feeds instead of videos, should be easy.
 
 # Usage
 
