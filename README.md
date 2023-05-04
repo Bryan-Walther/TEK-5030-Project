@@ -72,7 +72,7 @@ D = np.array(...)
 # Convert video to frames
 video_processor = VideoProcessor(video_path='./videos/dji_vid4.mp4', frames_path='./frames', frame_rate=frame_rate, t=t, movement_mode='parallel', K=K, D=D)
 # Or load frames from directory
-video_processor = VideoProcessor(video_path='./videos/vid1.mp4', frames_path='./frames', frame_rate=1, t=1, load_frames=True)
+video_processor = VideoProcessor(frames_path='./frames', frame_rate=1, t=1, load_frames=True, K=K, P=D)
 
 # Extract features from frame/s using specified descriptor type
 follower_extractor = Extractor(video_processor.follower_frames)

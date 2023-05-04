@@ -176,9 +176,10 @@ if __name__ == "__main__":
     # Show depth maps
     plt.imshow(follower_depths[0])
     plt.show()
-    '''
 
     # Doing stereo rectification, re-matching and detecting features on rectified images, and calculating "baseline".
+    '''
+
     '''
     # Extract feats and match again on rectified images
     follower_extractor_rect = Extractor(rectified_followers)
