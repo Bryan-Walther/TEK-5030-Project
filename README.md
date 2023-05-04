@@ -23,6 +23,12 @@ The script imports four submodules:
 There is also the `utils.py` file that has various utility functions for visualisation, pose estimation, image rectification, etc.
 
 # Current problems and what to do next
+To calculate the baseline, we need not only the disparity and focal length, which we have.
+We also need the depth of each feature correspondence to use the following equation: $${Z} = f\frac{b_x}{d} \rightarrow b_x = \frac{Zd}{f} $$
+Where Z is our depth, d is the disparity, f is the focal length, and b is the baseline(distance between the cameras).
+The problem is that for stereo imaging, it seems we need to know the baseline to estimate the depth, and vice versa.
+So the depth needs to be estimated somehow for this to work.
+
 The baseline calculation function works properly now after estimating the depth per frame using a pre-trained CNN.
 Using the small version of the model seems to be good enough, and is a good bit faster than the large model, hopefully this is fast enough for real time without GPU.
 The baseline estimation seems robust enough, as long as we have a good set of features and matches.

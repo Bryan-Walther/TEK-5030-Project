@@ -43,7 +43,7 @@ def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K,
             baselines.append(baseline)
         try:
             mean_baseline = np.mean(baselines)
-            #mean_baseline_filtered = filter_estimates(baselines)
+            mean_baseline_filtered = filter_estimates(baselines)
         except:
             print('Could not calculate disparity for frame {}'.format(idx))
             continue
@@ -56,15 +56,14 @@ def estimate_baseline(frame_num, follower_keypoints, lead_keypoints, matches, K,
             print('Could not estimate pose for frame {}'.format(idx))
             continue
 
-        # Calculate baseline using the magnitude of the translation vector
         baseline = mean_baseline
-        # Actual baseline is (depth * disparity) / focal_length but we don't have depth
-        #baseline_filtered = mean_baseline_filtered
-        baseline_per_frame.append(baseline)
+
+        baseline_filtered = mean_baseline_filtered
+        baseline_per_frame.append(baseline_filtered)
         normalized_pose_per_frame.append((R, T))
-        # round baseline to 3 decimal places
+
         print("Baseline for time {} is {} ".format(idx, baseline * scale_factor))
-        #print("Baseline for time {} is {}  (FILTERED)".format(idx, baseline_filtered * scale_factor))
+        print("Baseline for time {} is {}  (FILTERED)".format(idx, baseline_filtered * scale_factor))
         print("Translation vector for time {} is {}".format(idx, T.T))
         print("\n")
 
@@ -100,9 +99,9 @@ if __name__ == "__main__":
     # Load depth estimator model and the frames to estimate depth from
     follower_depth_estimator = DepthEstimator(model_type='MiDaS_small') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
     follower_depth_estimator.load_images_from_array(video_processor.follower_frames) # Load first frame for testing
-
+    
     # Show follower and lead frames side by side
-    #video_processor.show_split_frames()
+    video_processor.show_split_frames()
 
     # Dummy camera intrinsic parameters
     image_width = video_processor.frame_width
@@ -133,7 +132,7 @@ if __name__ == "__main__":
     lead_extractor.extract_features(descriptor_type=EXTRACTION_TYPE)
 
     # Use this to visualize the features
-    #show_features_split(follower_extractor.draw_keypoints(), lead_extractor.draw_keypoints())
+    show_features_split(follower_extractor.draw_keypoints(), lead_extractor.draw_keypoints())
 
     matcher = Matcher(follower_extractor, lead_extractor, RANSAC=True)
     matcher.match_features(matcher_type=MATCHER_TYPE, ratio_thresh=RATIOTHRESH)
@@ -146,10 +145,16 @@ if __name__ == "__main__":
     follower_keypoints, follower_descriptors, follower_frames = follower_extractor.get_params()
     lead_keypoints, lead_descriptors, lead_frames = lead_extractor.get_params()
     f_mats, rectified_followers, rectified_lead, rectified_images = rectify_images_batch(follower_frames, lead_frames, follower_keypoints, lead_keypoints, matcher.matches)
-    #show_frames(rectified_images)
+    show_frames(rectified_images)
     
     # Predict depth for each follower frame
     follower_depths = follower_depth_estimator.predict_depth()
+
+    # Show the depth maps
+    for depth_map in follower_depths:
+        plt.figure()
+        plt.imshow(depth_map)
+        plt.show()
 
     print("Calculating baseline for all frames without rectification\n")   
     baselines, _ = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, 
@@ -179,9 +184,4 @@ if __name__ == "__main__":
 
     print("Calculating baseline for all frames after rectification\n")   
     baselines_rect = estimate_baseline(len(rectified_followers), follower_keypoints_rect, lead_keypoints_rect, matcher_rect.matches, K, focal_length, principal_point=(cx, cy))
-
-    # Triangulate points
-    #points3D = triangulate_points_batch(follower_keypoints, lead_keypoints, matcher.matches, cameraMatrix1=P1, cameraMatrix2=P2)
-    # Flatten list of lists
-    #points3D = [item for sublist in points3D for item in sublist]
     '''
