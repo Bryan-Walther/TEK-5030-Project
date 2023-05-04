@@ -24,7 +24,7 @@ There is also the `utils.py` file that has various utility functions for visuali
 
 # Current problems and what to do next
 The main issue is that the `estimate_baseline()` is mostly just a place holder and needs to be correctly implemented.
-This doesn't work for now because we don't have the depth of the features, which seems to be necessary to use the following equation: $${Z} = f\frac{b_x}{d} \rightarrow b_x = \frac{Zf}{d} $$
+This doesn't work for now because we don't have the depth of the features, which seems to be necessary to use the following equation: $${Z} = f\frac{b_x}{d} \rightarrow b_x = \frac{Zd}{f} $$
 Where Z is our depth, d is the disparity, f is the focal length, and b is the baseline(distance between the cameras).
 The problem is that for stereo imaging, it seems we need to know the baseline to estimate the depth, and vice versa.
 
