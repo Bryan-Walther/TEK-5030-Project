@@ -54,7 +54,10 @@ from depthEstimator import DepthEstimator
 EXTRACTION_TYPE = 'SIFT'
 MATCHER_TYPE = 'bf'
 t = 1
-frame_rate = 4 
+frame_rate = 4
+# Scale to multiply the predicted depth with. If we calibrate with some object of known size in the scene, we can extract the scale and get depth in meters.
+SCALE_FACTOR = 10000
+
 
 # Camera intrinsic matrix
 K = np.array([
