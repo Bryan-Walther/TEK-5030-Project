@@ -70,6 +70,10 @@ video_processor = VideoProcessor(video_path='./videos/dji_vid4.mp4', frames_path
 # Or load frames from directory
 video_processor = VideoProcessor(frames_path='./frames', frame_rate=1, t=1, load_frames=True, K=K, P=D)
 
+# Load depth estimator model and the frames to estimate depth from
+follower_depth_estimator = DepthEstimator(model_type='MiDaS_small') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
+follower_depth_estimator.load_images_from_array(video_processor.follower_frames) # Load first frame for testing
+
 # Extract features from frame/s using specified descriptor type
 follower_extractor = Extractor(video_processor.follower_frames)
 follower_extractor.extract_features(descriptor_type=EXTRACTION_TYPE)
@@ -90,5 +94,6 @@ lead_keypoints, lead_descriptors, lead_frames = lead_extractor.get_params()
 f_mats, rectified_followers, rectified_lead, rectified_images = rectify_images_batch(follower_frames, lead_frames, follower_keypoints, lead_keypoints, matcher.matches)
 show_frames(rectified_images)
 
-baselines, _ = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, focal_length, principal_point=(cx, cy))
+    baselines, _ = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, 
+                                     focal_length, principal_point=(cx, cy), depth_maps=follower_depths, scale_factor=SCALE_FACTOR)
 ```
