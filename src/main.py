@@ -36,11 +36,9 @@ if __name__ == "__main__":
     # Convert video to frames
     video_processor = VideoProcessor(video_path='./videos/dji_vid4.mp4', frames_path='./frames', frame_rate=frame_rate, t=t, movement_mode='parallel')
 
-    '''
     video_processor.follower_frames = [video_processor.follower_frames[0]] * len(video_processor.lead_frames)*2
     # Add lead frames reversed at the end of lead frames
     video_processor.lead_frames = video_processor.lead_frames + video_processor.lead_frames[::-1]
-    '''
 
     # Or load frames from directory
     #video_processor = VideoProcessor(video_path='./videos/vid1.mp4', frames_path='./frames', frame_rate=1, t=1, load_frames=True)
@@ -99,13 +97,11 @@ if __name__ == "__main__":
     # Predict depth for each follower frame
     follower_depths = follower_depth_estimator.predict_depth()
 
-    '''
     # Show the depth maps
     for depth_map in follower_depths:
         plt.figure()
         plt.imshow(depth_map)
         plt.show()
-    '''
 
     print("Calculating baseline for all frames without rectification\n")   
     baselines, _ = estimate_baseline(len(follower_frames), follower_keypoints, lead_keypoints, matcher.matches, K, focal_length, principal_point=(cx, cy), depth_maps=follower_depths, scale_factor=SCALE_FACTOR)
