@@ -8,22 +8,6 @@ from videoProcessor import VideoProcessor
 from depthEstimation import DepthEstimator
 
 if __name__ == "__main__":
-    '''
-    Observations:
-        - SIFT is a better than ORB, takes longer though.
-        - ORB is the fastest, can result in few matches.
-        - BRISK is somewhere in the middle in terms of performance and quality.
-        - Apparently, SURF is patented and no longer free to use.
-        - Filtering with RANSAC improves the matching a lot.
-
-    TODO:
-        - Write a camera calibration function to get the intrinsic parameters. (maybe not necessary)
-        - Try to write a function to help visualize the poses, maybe having a third window with overlaid poses?
-        - Writing a bunch of visualization functions will probably help for the report.
-        - Rectify the images with respect to the calibrated camera parameters.
-        - Do the baseline estimation with the stereo-rectified images and see if it improves the results.
-        - (maybe, hopefully not) try to set up some simulation.
-    '''
     frame_rate = 5 
 
     # Dummy camera intrinsic parameters
