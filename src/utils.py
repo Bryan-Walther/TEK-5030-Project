@@ -8,11 +8,10 @@ def show_frames(frames: list):
     for i, frame in enumerate(frames):
         cv2.imshow(f"Frame {i}", frame)
 
-        key = cv2.waitKey(0)
+        key = cv2.waitKey(1)
         if key == ord('q'):
             break
 
-    cv2.destroyAllWindows()
 
 def show_features_split(follower, lead):
     num_follower = len(follower)
@@ -27,12 +26,11 @@ def show_features_split(follower, lead):
 
         combined_frame = cv2.hconcat([follower_frame, lead_frame])
         cv2.imshow("Lead and Follower Camera", combined_frame)
-        key = cv2.waitKey(0)
+        key = cv2.waitKey(1)
 
         if key == ord('q'):
             break
 
-    cv2.destroyAllWindows()
 
 # Computes the fundamental matrix and uses cv.stereoRectifyUncalibrated to compute the rectification transforms
 # https://www.andreasjakl.com/understand-and-apply-stereo-rectification-for-depth-maps-part-2/
