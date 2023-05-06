@@ -64,3 +64,28 @@ class DepthEstimator:
     def inv_depth_to_depth(self, inv_map):
         return 1 / (inv_map + 1e-6) # add small epsilon to avoid division by zero
 
+    # Ground truth is a numpy array of shape [n, 3] of n pixels with known depths.
+    def align(ground_truth):
+        '''
+        y = ground truth
+        x = Midas depth
+        s = scale param.
+        t = shift param.
+
+        solve for s and t
+        '''
+        y = ground_truth[:, 2]
+        # Index into depth map at x, y
+        x_idx = ground_truth[:, 0]
+        y_idx = ground_truth[:, 1]
+        x = self.detph_maps[x_idx, y_idx, :]
+        A = np.vstack([x, np.ones(len(x))]).T
+        s, t = np.linalg.lstsq(A, y, rcond=None)[0]
+        aligned_depth = s * self.depth_maps + t # Do we multiply by s or 1/s?
+        return aligned_depth
+
+
+
+
+
+
