@@ -6,11 +6,15 @@ import torch
 
 from depthEstimation import DepthEstimator
 from vehicleDetection import VehicleDetector
+from plateDetection import PlateDetector
 
-def drawDetections(img, detections):
+'''
+These extra functions should be moved to a utils file later
+'''
+def drawVehicleDetections(img, detections):
     # detections is a pandas dataframe with columns: xmin, ymin, xmax, ymax, confidence, class, name
-    detection_img = img.copy()
     # Draw detections and add depth values as a label to the rectangle
+    detection_img = img.copy()
     for index, row in detections.iterrows():
         xmin, ymin, xmax, ymax = row['xmin'], row['ymin'], row['xmax'], row['ymax']
         # Round xmin, ymin, xmax, ymax to int
@@ -24,6 +28,19 @@ def drawDetections(img, detections):
         cv2.rectangle(detection_img, panel_pos, (panel_pos[0]+panel_size[0], panel_pos[1]+panel_size[1]), (0,0,0), -1)
         cv2.putText(detection_img, depth_label, (panel_pos[0]+5, panel_pos[1]+label_size[1]+5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
     return detection_img
+
+def drawPlateDetections(img, detections):
+    # detections is a pandas dataframe with columns: xmin, ymin, xmax, ymax, confidence, class, name
+    # Draw detections and add depth values as a label to the rectangle
+
+    for index, row in detections.iterrows():
+        xmin, ymin, xmax, ymax = row['xmin'], row['ymin'], row['xmax'], row['ymax']
+        # Round xmin, ymin, xmax, ymax to int
+        xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax), int(ymax)
+        cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+        # Add black background panel to depth label
+        cv2.rectangle(img, (xmin, ymin-20), (xmax, ymin), (0,0,0), -1)
+
 
 def getMeanDepth(depth, detections):
     # detections is a pandas dataframe with columns: xmin, ymin, xmax, ymax, confidence, class, name
@@ -43,28 +60,49 @@ def getMeanDepth(depth, detections):
 
     return detections
 
+def cropDetection(img, detections):
+    # detections is a pandas dataframe with columns: xmin, ymin, xmax, ymax, confidence, class, name
+    # Draw detections and add depth values as a label to the rectangle
+    detection_img = img.copy()
+    cropped_images = []
+    for i, detection in detections.iterrows():
+        xmin, ymin, xmax, ymax = detection['xmin'], detection['ymin'], detection['xmax'], detection['ymax']
+        # Round xmin, ymin, xmax, ymax to int
+        xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax), int(ymax)
+        label = f"cropped_{i}"
+        cv2.rectangle(detection_img, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+        cv2.putText(detection_img, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+        cropped_img = img[ymin:ymax, xmin:xmax]
+        cropped_images.append(cropped_img)
+    return cropped_images
 
+def showCroppedDetection(cropped_images, label=''):
+    # Uses cv2 to show all the detections in a grid on a single window
+    num_cols = 4
+    num_rows = -(-len(cropped_images) // num_cols)  # Ceiling division to calculate number of rows
+    grid_size = 100
+    padding = 10
+    output_img = np.zeros((num_rows * (grid_size + padding) + padding, num_cols * (grid_size + padding) + padding, 3), dtype=np.uint8)
+    output_img.fill(255)
+    for i, cropped_img in enumerate(cropped_images):
+        row = i // num_cols
+        col = i % num_cols
+        x = col * (grid_size + padding) + padding
+        y = row * (grid_size + padding) + padding
+        resized_img = cv2.resize(cropped_img, (grid_size, grid_size), interpolation=cv2.INTER_AREA)
+        output_img[y:y+grid_size, x:x+grid_size] = resized_img
+    cv2.imshow(f"Cropped Detections {label}", output_img)
 
 if __name__ == "__main__":
-    frame_rate = 5 
-
-    # Dummy camera intrinsic parameters
-    image_width = 1280
-    image_height = 720
-
-    font                   = cv2.FONT_HERSHEY_SIMPLEX
-    bottomLeftCornerOfText = (10,20)
-    fontScale              = 1
-    fontColor              = (0,0,0)
-    thickness              = 2 
-    lineType               = 2
+    FRAME_RATE = 5 
+    CONFIDENCE_THRESHOLD = 0.85 # Only show detections with confidence above this threshold
 
     #cap = cv2.VideoCapture(0)
     cap = cv2.VideoCapture('test_images/vid1.mp4')
-    cap.set(cv2.CAP_PROP_FPS, frame_rate)
-    follower_depth_estimator = DepthEstimator(model_type='DPT_Large') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
-    vehicle_detector = VehicleDetector('./yolov5.pt', device='cpu')
-    initial_frame = np.zeros((1280, 720, 3), dtype=np.uint8)
+    cap.set(cv2.CAP_PROP_FPS, FRAME_RATE)
+    follower_depth_estimator = DepthEstimator(model_type='MiDaS_small') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
+    vehicle_detector = VehicleDetector('./yolov5.pt', device='cpu', confidence_threshold=CONFIDENCE_THRESHOLD)
+    plate_detector = PlateDetector(device='cpu')
 
     while True:
         key = cv2.waitKey(1)
@@ -81,24 +119,29 @@ if __name__ == "__main__":
 
         # Detect vehicles
         vehicle_boxes = vehicle_detector.detect(frame)
-        vehicle_boxes = getMeanDepth(depth_map[0], vehicle_boxes)
-
-        detection_img = drawDetections(frame, vehicle_boxes)
         #print(vehicle_boxes)
-        cv2.imshow('detection_img', detection_img)
+        if vehicle_boxes is not None:
+            vehicle_boxes = getMeanDepth(depth_map[0], vehicle_boxes)
 
+            # Draw detections of vehicles
+            vehicle_detection_img = drawVehicleDetections(frame, vehicle_boxes)
+            cv2.imshow('detection_img', vehicle_detection_img)
+
+            # Show cropped detections
+            vehicle_cropped_images = cropDetection(frame, vehicle_boxes)
+            showCroppedDetection(vehicle_cropped_images, label='vehicles')
+            for vehicle_cropped_img in vehicle_cropped_images:
+                plate_boxes = plate_detector.detect(vehicle_cropped_img)
+                if plate_boxes is not None:
+                    #drawPlateDetections(vehicle_detection_img, plate_boxes) Not working yet
+                    plate_cropped_img = cropDetection(vehicle_cropped_img, plate_boxes)
+                    showCroppedDetection(plate_cropped_img, label='plates')
+            
+
+        # Show frame and depth map side by side
         #stack = np.hstack((frame, colormap_depth_map))
         #cv2.imshow('Frame and corresponding depth map', stack)
 
-        baseline = 0
-
-        cv2.putText(frame,f'Distance from initial frame: {baseline}',
-            bottomLeftCornerOfText,
-            font,
-            fontScale,
-            fontColor,
-            thickness,
-            lineType)
 
     cap.release()
     cv2.destroyAllWindows()
