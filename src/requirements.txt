@@ -1,6 +1,0 @@
-opencv-python==3.4.18.65
-opencv-contrib-python==3.4.18.65
-torch
-numpy
-matplotlib
-scipy
