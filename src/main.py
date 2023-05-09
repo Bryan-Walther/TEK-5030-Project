@@ -29,18 +29,6 @@ def drawVehicleDetections(img, detections):
         cv2.putText(detection_img, depth_label, (panel_pos[0]+5, panel_pos[1]+label_size[1]+5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
     return detection_img
 
-def drawPlateDetections(img, detections):
-    # detections is a pandas dataframe with columns: xmin, ymin, xmax, ymax, confidence, class, name
-    # Draw detections and add depth values as a label to the rectangle
-
-    for index, row in detections.iterrows():
-        xmin, ymin, xmax, ymax = row['xmin'], row['ymin'], row['xmax'], row['ymax']
-        # Round xmin, ymin, xmax, ymax to int
-        xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax), int(ymax)
-        cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-        # Add black background panel to depth label
-        cv2.rectangle(img, (xmin, ymin-20), (xmax, ymin), (0,0,0), -1)
-
 
 def getMeanDepth(depth, detections):
     # detections is a pandas dataframe with columns: xmin, ymin, xmax, ymax, confidence, class, name
@@ -60,10 +48,18 @@ def getMeanDepth(depth, detections):
 
     return detections
 
-def cropDetection(img, detections):
+def cropDetection(src_img, detections, obj_type='vehicle'):
     # detections is a pandas dataframe with columns: xmin, ymin, xmax, ymax, confidence, class, name
     # Draw detections and add depth values as a label to the rectangle
-    detection_img = img.copy()
+    # Returns a list of tuples containing the cropped images and location of the cropped image in the original image
+    if obj_type == 'vehicle':
+        detection_img = src_img.copy()
+        img = src_img
+    else:
+        detection_img = src_img[0].copy()
+        img = src_img[0]
+        
+
     cropped_images = []
     for i, detection in detections.iterrows():
         xmin, ymin, xmax, ymax = detection['xmin'], detection['ymin'], detection['xmax'], detection['ymax']
@@ -73,7 +69,12 @@ def cropDetection(img, detections):
         cv2.rectangle(detection_img, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
         cv2.putText(detection_img, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
         cropped_img = img[ymin:ymax, xmin:xmax]
-        cropped_images.append(cropped_img)
+        location = (xmin, ymin, xmax, ymax)
+        if obj_type == 'plate':
+            org_xmin, org_ymin, org_xmax, org_ymax = src_img[1]
+            location = (org_xmin + xmin, org_ymin + ymin, org_xmin + xmax, org_ymin + ymax)
+
+        cropped_images.append((cropped_img, location))
     return cropped_images
 
 def showCroppedDetection(cropped_images, label=''):
@@ -89,9 +90,39 @@ def showCroppedDetection(cropped_images, label=''):
         col = i % num_cols
         x = col * (grid_size + padding) + padding
         y = row * (grid_size + padding) + padding
-        resized_img = cv2.resize(cropped_img, (grid_size, grid_size), interpolation=cv2.INTER_AREA)
+        resized_img = cv2.resize(cropped_img[0], (grid_size, grid_size), interpolation=cv2.INTER_AREA)
         output_img[y:y+grid_size, x:x+grid_size] = resized_img
     cv2.imshow(f"Cropped Detections {label}", output_img)
+
+def getEdges(img):
+    # Convert image to grayscale
+    img = img.copy()
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Apply thresholding to create a binary image
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    # Find contours in the binary image
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Get the contour with the largest area
+    max_contour = max(contours, key=cv2.contourArea)
+    # Find the bounding rectangle of the largest contour
+    x, y, w, h = cv2.boundingRect(max_contour)
+    # Draw the rectangle on the original image
+    cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 1)
+
+    return img
+
+# Draw an array of rectangles on an image (general purpose)
+def draw(img, detections):
+    if detections is None:
+        return
+    # Draw a rectangle for each detection on the copy image
+    for detect in detections:
+        # Extract the coordinates of the detection
+        xmin, ymin, xmax, ymax = detect
+        # Draw a rectangle around the detection on the copy image
+        cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 255, 0), thickness=2)
+    # Return the copy image with the rectangles drawn on it
+
 
 if __name__ == "__main__":
     FRAME_RATE = 5 
@@ -119,24 +150,25 @@ if __name__ == "__main__":
 
         # Detect vehicles
         vehicle_boxes = vehicle_detector.detect(frame)
-        #print(vehicle_boxes)
         if vehicle_boxes is not None:
-            vehicle_boxes = getMeanDepth(depth_map[0], vehicle_boxes)
+            vehicle_boxes = getMeanDepth(depth_map[0], vehicle_boxes) # Adds a depth column to the vehicle_boxes dataframe
 
             # Draw detections of vehicles
             vehicle_detection_img = drawVehicleDetections(frame, vehicle_boxes)
-            cv2.imshow('detection_img', vehicle_detection_img)
 
             # Show cropped detections
-            vehicle_cropped_images = cropDetection(frame, vehicle_boxes)
+            vehicle_cropped_images = cropDetection(frame, vehicle_boxes, obj_type='vehicle')
             showCroppedDetection(vehicle_cropped_images, label='vehicles')
             for vehicle_cropped_img in vehicle_cropped_images:
-                plate_boxes = plate_detector.detect(vehicle_cropped_img)
+                plate_boxes = plate_detector.detect(vehicle_cropped_img[0])
                 if plate_boxes is not None:
-                    #drawPlateDetections(vehicle_detection_img, plate_boxes) Not working yet
-                    plate_cropped_img = cropDetection(vehicle_cropped_img, plate_boxes)
-                    showCroppedDetection(plate_cropped_img, label='plates')
+                    plate_cropped_img = cropDetection(vehicle_cropped_img, plate_boxes, obj_type='plate')
+                    plate_highlighted_img = [(getEdges(img), location) for img, location in plate_cropped_img]
+                    showCroppedDetection(plate_highlighted_img, label='plates')
+                    draw(vehicle_detection_img, [plate[1] for plate in plate_cropped_img]) # Overlay the plates onto the vehicle detection image
             
+            
+            cv2.imshow('detection_img', vehicle_detection_img)
 
         # Show frame and depth map side by side
         #stack = np.hstack((frame, colormap_depth_map))
