@@ -120,16 +120,16 @@ def draw(img, detections):
         # Extract the coordinates of the detection
         xmin, ymin, xmax, ymax = detect
         # Draw a rectangle around the detection on the copy image
-        cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 255, 0), thickness=2)
+        cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 0, 255), thickness=2)
     # Return the copy image with the rectangles drawn on it
 
 
 if __name__ == "__main__":
     FRAME_RATE = 5 
-    CONFIDENCE_THRESHOLD = 0.85 # Only show detections with confidence above this threshold
+    CONFIDENCE_THRESHOLD = 0.75 # Only show detections with confidence above this threshold
 
     #cap = cv2.VideoCapture(0)
-    cap = cv2.VideoCapture('test_images/vid1.mp4')
+    cap = cv2.VideoCapture('test_images/vid5.mp4')
     cap.set(cv2.CAP_PROP_FPS, FRAME_RATE)
     follower_depth_estimator = DepthEstimator(model_type='MiDaS_small') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
     vehicle_detector = VehicleDetector('./yolov5.pt', device='cpu', confidence_threshold=CONFIDENCE_THRESHOLD)
@@ -163,8 +163,7 @@ if __name__ == "__main__":
                 plate_boxes = plate_detector.detect(vehicle_cropped_img[0])
                 if plate_boxes is not None:
                     plate_cropped_img = cropDetection(vehicle_cropped_img, plate_boxes, obj_type='plate')
-                    plate_highlighted_img = [(getEdges(img), location) for img, location in plate_cropped_img]
-                    showCroppedDetection(plate_highlighted_img, label='plates')
+                    showCroppedDetection(plate_cropped_img, label='plates')
                     draw(vehicle_detection_img, [plate[1] for plate in plate_cropped_img]) # Overlay the plates onto the vehicle detection image
             
             
