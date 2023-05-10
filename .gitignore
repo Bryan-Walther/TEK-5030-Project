@@ -1,2 +1,3 @@
 src/frames/*
 src/test.py
+src/cfg/yolov4.weights
