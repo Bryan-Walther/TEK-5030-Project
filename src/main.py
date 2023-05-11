@@ -30,6 +30,7 @@ def drawVehicleDetections(img, detections):
     return detection_img
 
 
+# Gets the mean depth from depth map within a bounding box, currently used to determine the depth for detected vehicles.
 def getMeanDepth(depth, detections):
     # detections is a pandas dataframe with columns: xmin, ymin, xmax, ymax, confidence, class, name
     # Get depth of each detection
@@ -47,6 +48,55 @@ def getMeanDepth(depth, detections):
     detections["depth"] = depth_per_detection
 
     return detections
+
+def estimateMeanDepth(detections, org_img, real_world_dims=(0.335, 0.155), focal_length=675): # Default plate size for korea 335mm width, 170mm height
+    '''
+    Takes cropped images of detected plates and estimates the depth from known world size of plate.
+    All of the pixels belonging to the detections are then assigned to this estimated depth
+    The function returns an array of tuples (x, y, z) with x, y coordinates of plate pixel in image and z estimated depth.
+    detections[i][0] is the image, detections[i][1] is the xmin, ymin, xmax, ymax coordinates in the original image for plate i
+    '''
+    pixel_coords = np.empty((0, 3))
+    for i, detection in enumerate(detections):
+        img, location = detection
+        xmin, ymin, xmax, ymax = location
+        # Calculate depth from known plate size
+        plate_width, plate_height = real_world_dims
+        plate_width_pixels = xmax - xmin
+        plate_height_pixels = ymax - ymin
+        # Calculate depth from known plate size
+        depth = (focal_length*plate_width) / plate_width_pixels
+        # Create a 2D array of depth values
+        depth_array = np.full((plate_height_pixels, plate_width_pixels), depth)
+        # Create arrays of x and y coordinates
+        x_coords = np.arange(xmin, xmax)
+        y_coords = np.arange(ymin, ymax)
+        # Create a grid of x and y coordinates
+        xx, yy = np.meshgrid(x_coords, y_coords)
+        # Stack the x, y, and depth arrays
+        pixel_coords_d = np.dstack((xx, yy, depth_array))
+        # Reshape the pixel_coords array into a 2D array
+        pixel_coords_d = pixel_coords_d.reshape(-1, 3)
+        # Append the pixel_coords to the estimates list
+        real_world_aspect_ratio = plate_width / plate_height
+        image_aspect_ratio = plate_width_pixels / plate_height_pixels
+        # if aspect ratios are within 58% of each other, then append the pixel coordinates
+        THRESHOLD = 0.70 # How much deviation from the real world aspect ratio is allowed
+        if abs(image_aspect_ratio - real_world_aspect_ratio) / real_world_aspect_ratio <= THRESHOLD:
+            pixel_coords = np.append(pixel_coords, pixel_coords_d, axis=0)
+            # FOR TESTING
+            # Draw bounding box on original image and add depth label
+            cv2.rectangle(org_img, (xmin, ymin), (xmax, ymax), (0, 0, 255), 2)
+            depth_label = "Depth: {:.2f} m".format(round(depth, 2))
+            # Add black background panel to depth label
+            label_size, _ = cv2.getTextSize(depth_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            panel_size = (label_size[0]+10, label_size[1]+10)
+            panel_pos = (xmin, ymin - panel_size[1])
+            cv2.rectangle(org_img, panel_pos, (panel_pos[0]+panel_size[0], panel_pos[1]+panel_size[1]), (0,0,0), -1)
+            cv2.putText(org_img, depth_label, (panel_pos[0]+5, panel_pos[1]+label_size[1]+5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            #print("Aspects ratio of plate on image {} is {:.2f}".format(i, plate_width_pixels/plate_height_pixels))
+            #print("Aspect ratio of plate in real world is {:.2f}".format(plate_width/plate_height))
+    return pixel_coords.tolist()
 
 def cropDetection(src_img, detections, obj_type='vehicle'):
     # detections is a pandas dataframe with columns: xmin, ymin, xmax, ymax, confidence, class, name
@@ -127,6 +177,9 @@ def draw(img, detections):
 if __name__ == "__main__":
     FRAME_RATE = 5 
     CONFIDENCE_THRESHOLD = 0.75 # Only show detections with confidence above this threshold
+    # Focal length of the camera value doesnt make much sense, but when tweaked until we get a reasonable depth value it seems consistent.
+    # Might be some unit mistakes somewhere not sure
+    FOCAL_LENGTH = 811.82 
 
     #cap = cv2.VideoCapture(0)
     cap = cv2.VideoCapture('test_images/vid1.mp4')
@@ -164,8 +217,8 @@ if __name__ == "__main__":
                 if plate_boxes is not None:
                     plate_cropped_img = cropDetection(vehicle_cropped_img, plate_boxes, obj_type='plate')
                     showCroppedDetection(plate_cropped_img, label='plates')
-                    draw(vehicle_detection_img, [plate[1] for plate in plate_cropped_img]) # Overlay the plates onto the vehicle detection image
-            
+                    #draw(vehicle_detection_img, [plate[1] for plate in plate_cropped_img]) # Overlay the plates onto the vehicle detection image
+                    estimated_depth = estimateMeanDepth(plate_cropped_img, vehicle_detection_img, focal_length=FOCAL_LENGTH)
             
             cv2.imshow('detection_img', vehicle_detection_img)
 
