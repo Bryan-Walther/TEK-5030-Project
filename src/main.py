@@ -180,7 +180,7 @@ if __name__ == "__main__":
     CONFIDENCE_THRESHOLD = 0.75 # Only show detections with confidence above this threshold
     # Focal length of the camera value doesnt make much sense, but when tweaked until we get a reasonable depth value it seems consistent.
     # Might be some unit mistakes somewhere not sure
-    FOCAL_LENGTH = 1800.9 # Focal length is supposed to me in pixels. This is what we get from the camera calibration.
+    FOCAL_LENGTH = 800.9 # Focal length is supposed to me in pixels. This is what we get from the camera calibration.
     OFFSET = 0.0 # Offset to the focal length value for further calibration from camera matrix focal length
 
     # Camera intrinsics for when we use our own videos
@@ -190,7 +190,7 @@ if __name__ == "__main__":
     dist_coeffs = np.array([0., 2.2202255011309072e-01, 0., 0., -5.0348071005413975e-01])
 
     # Change the focal length if using own camera
-    FOCAL_LENGTH = camera_matrix[0][0] + OFFSET
+    #FOCAL_LENGTH = camera_matrix[0][0] + OFFSET
     
     #cap = cv2.VideoCapture(0) # Use webcam
     cap = cv2.VideoCapture('test_images/vid1.mp4') # Use video file
@@ -198,11 +198,11 @@ if __name__ == "__main__":
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = None
 
-    #depth_estimator = DepthEstimatorZoe(model_type='NK', device='cpu') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
-    depth_estimator = DepthEstimator(model_type='MiDaS_small', device='cpu') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
+    depth_estimator = DepthEstimatorZoe(model_type='NK', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
+    #depth_estimator = DepthEstimator(model_type='MiDaS_small', device='cpu') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
 
-    vehicle_detector = VehicleDetector('./yolov5.pt', device='cpu', confidence_threshold=CONFIDENCE_THRESHOLD)
-    plate_detector = PlateDetector(device='cpu')
+    vehicle_detector = VehicleDetector('./yolov5.pt', device='cuda:0', confidence_threshold=CONFIDENCE_THRESHOLD)
+    plate_detector = PlateDetector(device='cuda:0')
     while True:
         key = cv2.waitKey(1)
         if key == ord('q'):
@@ -220,11 +220,12 @@ if __name__ == "__main__":
             plate_cropped_images_per_vehicle = [cropDetection(cropped_img, plate_boxes_per_vehicle[i], obj_type='plate') for i, cropped_img in enumerate(vehicle_cropped_images)]
 
             # Estimate depth of plate and correct depth map
-            known_depths = np.vstack([estimateMeanDepth(plate_cropped_img, final_img, focal_length=FOCAL_LENGTH) for plate_cropped_img in plate_cropped_images_per_vehicle])
-            # Sort by confidence, 4th column
-            known_depths = known_depths[known_depths[:, 3].argsort()]
+            try:
+                known_depths = np.vstack([estimateMeanDepth(plate_cropped_img, final_img, focal_length=FOCAL_LENGTH) for plate_cropped_img in plate_cropped_images_per_vehicle])
+            except:
+                known_depths = None
             #known_depths = None 
-            corrected_depth_map = depth_estimator.updateDepthEstimates(depth_map, known_depths[:PLATE_PIXEL_NUM])
+            corrected_depth_map = depth_estimator.updateDepthEstimates(depth_map, known_depths)
             corrected_vehicle_boxes = getMinDepth(corrected_depth_map, vehicle_boxes.copy())
 
             # Draw the images with and without depth correction
@@ -233,7 +234,7 @@ if __name__ == "__main__":
 
         # Show corrected and uncorrected images side by side
         img = np.hstack((uncorrected_final_img, corrected_final_img))
-        #img = cv2.resize(img, (img.shape[1]//2, img.shape[0]//2))
+        img = cv2.resize(img, (img.shape[1]//2, img.shape[0]//2))
         cv2.imshow("Uncorrected(left) vs Corrected(right)", img)
 
         if writer is None:
