@@ -31,6 +31,7 @@ if __name__ == "__main__":
 
     #cap = cv2.VideoCapture(4)
     cap = cv2.VideoCapture('src/videos/cars.mp4')
+    style = 'US'
     video = True
 
 
@@ -45,16 +46,30 @@ if __name__ == "__main__":
             frames = cap.copy()
 
         if first:
-            #us plate
-            pxPerM = frames.shape[0]/0.30
-            pxPlateHightAtCamera = pxPerM*0.15
-            pxPlateArea = pxPlateHightAtCamera*frames.shape[0]
+            if style=='US':
+                #us plate
+                pxPerM = frames.shape[0]/0.30
+                pxPlateWidthAtCamera = frames.shape[0]
+                pxPlateHightAtCamera = pxPerM*0.15
+                pxPlateArea = pxPlateHightAtCamera*frames.shape[0]
 
-            distAtCamera = 0.5*frames.shape[0]/np.tan(np.deg2rad(fov/2)) / pxPerM
+                distAtCamera = 0.5*frames.shape[0]/np.tan(np.deg2rad(fov/2)) / pxPerM
 
-            print(f"Px/m: {pxPerM}, pxPlateArea: {pxPlateArea}, distAtCamera: {distAtCamera}")
+                print(f"Px/m: {pxPerM}, pxPlateArea: {pxPlateArea}, distAtCamera: {distAtCamera}")
 
-            first = False
+                first = False
+            if style=='EU':
+                #EU plate
+                pxPerM = frames.shape[0]/0.52
+                pxPlateWidthAtCamera = frames.shape[0]
+                pxPlateHightAtCamera = pxPerM*0.11
+                pxPlateArea = pxPlateHightAtCamera*frames.shape[0]
+
+                distAtCamera = 0.5*frames.shape[0]/np.tan(np.deg2rad(fov/2)) / pxPerM
+
+                print(f"Px/m: {pxPerM}, pxPlateArea: {pxPlateArea}, distAtCamera: {distAtCamera}")
+
+                first = False
 
         
         gray = cv2.cvtColor(frames, cv2.COLOR_BGR2GRAY)
@@ -83,17 +98,19 @@ if __name__ == "__main__":
                 cv2.rectangle(carROI, (cx, cy), (cx+cw, cy+ch), (0, 255, 255), 1)
                 if (cy < 0.4*h or (cy+ch) > .8*h) or (cx < 0.3*w or (cx+cw) > 0.7*w ):
                     continue
-                if cw >= (ch*1.5) and cw <= (ch*2.5) and (cw*ch) <= (0.05*h*w):  #US Style Plate 0.3x0.15m 
+
+                if (style=='US') and cw >= (ch*1.5) and cw <= (ch*2.5) and (cw*ch) <= (0.05*h*w):  #US Style Plate 0.3x0.15m 
                     cv2.rectangle(carROI, (cx, cy), (cx+cw, cy+ch), (0, 0, 255), 2)
                     screenCnt = approx
                     cv2.rectangle(frames, (cx+x, cy+y), (cx+cw+x, cy+ch+y), (255, 0, 0), 2)
 
-                    dist = pxPlateArea/(cy*ch)*distAtCamera
+                    dist1 = pxPlateHightAtCamera/(ch)*distAtCamera
+                    dist2 = pxPlateWidthAtCamera/cw*distAtCamera
 
                     org = (x, y+ch)
-                    cv2.putText(frames, f"Dist: {dist}", org, font, fontScale, fontColor, fontThickness)
+                    cv2.putText(frames, f"Dist1: {dist1}, Dist2:{dist2}, Avg {(dist1+dist2)/2}", org, font, fontScale, fontColor, fontThickness)
                     # break
-                elif cw >= (ch*4) and cw <= (ch*5) and (cw*ch) <= (0.05*h*w): #EU Style Plate 0.51x0.12m
+                elif (style == 'EU') and w >= (ch*4) and cw <= (ch*5) and (cw*ch) <= (0.05*h*w): #EU Style Plate 0.51x0.12m
                     cv2.rectangle(carROI, (cx, cy), (cx+cw, cy+ch), (0, 0, 255), 2)
                     screenCnt = approx
                     cv2.rectangle(frames, (cx+x, cy+y), (cx+cw+x, cy+ch+y), (255, 0, 255), 2)
@@ -115,9 +132,11 @@ if __name__ == "__main__":
             video = True
         if key == ord('1'):
             cap = cv2.VideoCapture('src/videos/cars.mp4')
+            style = 'US'
             video = True
         if key == ord('2'):
             cap = cv2.imread('src/frames/img5.png')
+            style = 'EU'
             video = False
         if key == ord(' '): #Pressing space will pause the playback, press any key to resume
             cv2.waitKey(0)

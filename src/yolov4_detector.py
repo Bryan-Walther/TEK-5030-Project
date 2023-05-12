@@ -3,6 +3,7 @@ import imutils
 import cv2
 
 inputVideoPath = 'src/videos/cars.mp4'
+style = 'US'
 outputVideoPath = 'src/videos/output.avi'
 yoloWeightsPath = 'src/cfg/yolov4.weights'
 yoloConfigPath = 'src/cfg/yolov4.cfg'
@@ -18,6 +19,14 @@ ln = [ln[i - 1] for i in net.getUnconnectedOutLayers()]
 vs = cv2.VideoCapture(inputVideoPath)
 video = True
 
+first = True
+
+font = cv2.FONT_HERSHEY_SIMPLEX
+fontScale = 0.45
+fontColor = (0, 0, 0)
+fontThickness = 1
+fov = 100.0
+
 (W, H) = (None,None)
 # try:
 #     prop = cv2.CAP_PROP_FRAME_COUNT if imutils.is_cv2() else cv2.CAP_PROP_FRAME_COUNT
@@ -27,12 +36,50 @@ video = True
 #     print('Frames could not be determined')
 while True:
     if video:
-        (grabbed, frame) = vs.read()
+        (grabbed, raw) = vs.read()
     else:
-        frame = vs.copy()
-    raw = frame.copy()
+        raw = vs.copy()
+    frame = raw.copy()
     if not grabbed:
         break
+
+    if first:
+        if style=='US':
+            #us plate
+            pxPerM = frame.shape[0]/0.30
+            pxPlateWidthAtCamera = frame.shape[0]
+            pxPlateHightAtCamera = pxPerM*0.15
+            pxPlateArea = pxPlateHightAtCamera*frame.shape[0]
+
+            distAtCamera = 0.5*frame.shape[0]/np.tan(np.deg2rad(fov/2)) / pxPerM
+
+            print(f"Px/m: {pxPerM}, pxPlateArea: {pxPlateArea}, distAtCamera: {distAtCamera}")
+
+            first = False
+        if style=='EU':
+            #EU plate
+            pxPerM = frame.shape[0]/0.52
+            pxPlateWidthAtCamera = frame.shape[0]
+            pxPlateHightAtCamera = pxPerM*0.11
+            pxPlateArea = pxPlateHightAtCamera*frame.shape[0]
+
+            distAtCamera = 0.5*frame.shape[0]/np.tan(np.deg2rad(fov/2)) / pxPerM
+
+            print(f"Px/m: {pxPerM}, pxPlateArea: {pxPlateArea}, distAtCamera: {distAtCamera}")
+
+            first = False
+        if style =='CN':
+            #CN plate
+            pxPerM = frame.shape[0]/0.44
+            pxPlateWidthAtCamera = frame.shape[0]
+            pxPlateHightAtCamera = pxPerM*0.14
+            pxPlateArea = pxPlateHightAtCamera*frame.shape[0]
+
+            distAtCamera = 0.5*frame.shape[0]/np.tan(np.deg2rad(fov/2)) / pxPerM
+
+            print(f"Px/m: {pxPerM}, pxPlateArea: {pxPlateArea}, distAtCamera: {distAtCamera}")
+
+            first = False
     if W is None and H is None:
         (H, W) = frame.shape[:2]
         
@@ -109,25 +156,41 @@ while True:
                     approx = cv2.approxPolyDP(c, 0.018 * peri, True)
                     cx, cy, cw, ch = cv2.boundingRect(approx)
                     cv2.rectangle(carROI, (cx, cy), (cx+cw, cy+ch), (0, 255, 255), 1)
-                    if (cy < 0.4*h or (cy+ch) > .8*h) or (cx < 0.3*w or (cx+cw) > 0.7*w ):
+                    if (cy < 0.4*h or (cy+ch) > h) or (cx < 0.3*w or (cx+cw) > 0.7*w ):
                         continue
-                    if cw >= (ch*1.5) and cw <= (ch*2.5) and (cw*ch) <= (0.05*h*w):  #US Style Plate 0.3x0.15m 
+                    if (style=='US') and cw >= (ch*1.5) and cw <= (ch*2.5) and (cw*ch) <= (0.05*h*w):  #US Style Plate 0.3x0.15m 
                         cv2.rectangle(carROI, (cx, cy), (cx+cw, cy+ch), (0, 0, 255), 2)
                         screenCnt = approx
                         cv2.rectangle(frame, (cx+x, cy+y), (cx+cw+x, cy+ch+y), (255, 0, 0), 2)
+                        plateROI = raw[cy+y:cy+ch+y, cx+x:cx+cw+x]
+                        cv2.imshow('Plate', plateROI)
 
-                        # dist = pxPlateArea/(cy*ch)*distAtCamera
+                        dist1 = pxPlateHightAtCamera/(ch)*distAtCamera
+                        dist2 = pxPlateWidthAtCamera/cw*distAtCamera
 
-                        # org = (x, y+ch)
-                        # cv2.putText(frames, f"Dist: {dist}", org, font, fontScale, fontColor, fontThickness)
-                        # break
-                    elif cw >= (ch*4) and cw <= (ch*5) and (cw*ch) <= (0.05*h*w): #EU Style Plate 0.51x0.12m
+                        org = (x, y+ch)
+                        cv2.putText(frame, f"Dist{(dist1+dist2)/2}", org, font, fontScale, fontColor, fontThickness)
+                    elif (style == 'EU') and cw >= (ch*4) and cw <= (ch*5) and (cw*ch) <= (0.05*h*w): #EU Style Plate 0.51x0.12m
                         cv2.rectangle(carROI, (cx, cy), (cx+cw, cy+ch), (0, 0, 255), 2)
                         screenCnt = approx
                         # cv2.rectangle(frames, (cx+x, cy+y), (cx+cw+x, cy+ch+y), (255, 0, 255), 2)
+                    if (style=='CN') and cw >= (ch*2.75) and cw <= (ch*3.5) and (cw*ch) <= (0.05*h*w):  #CN Style Plate 0.44x0.14m 
+                        cv2.rectangle(carROI, (cx, cy), (cx+cw, cy+ch), (0, 0, 255), 2)
+                        screenCnt = approx
+                        cv2.rectangle(frame, (cx+x, cy+y), (cx+cw+x, cy+ch+y), (255, 0, 0), 2)
+                        plateROI = raw[cy+y:cy+ch+y, cx+x:cx+cw+x]
+                        cv2.imshow('Plate', plateROI)
+
+                        dist1 = pxPlateHightAtCamera/(ch)*distAtCamera
+                        dist2 = pxPlateWidthAtCamera/cw*distAtCamera
+
+                        org = (x, y+ch)
+                        cv2.putText(frame, f"Dist{(dist1+dist2)/2}", org, font, fontScale, fontColor, fontThickness)
+                        #print(f"D1: {dist1}, d2: {dist2}, avg: {(dist1+dist2)/2}")
 
                 cv2.imshow('Car ROI', carROI)
                 cv2.imshow('Edges', edged)
+                
 
     cv2.imshow("detected",frame)
 
@@ -139,10 +202,20 @@ while True:
         video = True
     if key == ord('1'):
         vs = cv2.VideoCapture('src/videos/cars.mp4')
+        style = 'US'
         video = True
+        first = True
     if key == ord('2'):
         vs = cv2.imread('src/frames/img5.png')
+        style = 'EU'
         video = False
+        first = True
+    if key == ord('3'):
+        vs = cv2.VideoCapture('src/videos/vid3.mp4')
+        fov = 15
+        style = 'CN'
+        video = True
+        first = True
     if key == ord(' '): #Pressing space will pause the playback, press any key to resume
         cv2.waitKey(0)
 
