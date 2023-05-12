@@ -60,14 +60,15 @@ def estimateMeanDepth(detections, org_img, real_world_dims=(0.520, 0.110), focal
     pixel_coords = np.empty((0, 4))
     for i, detection in enumerate(detections):
         img, location, confidence = detection
-        print(confidence)
         xmin, ymin, xmax, ymax = location
         # Calculate depth from known plate size
         plate_width, plate_height = real_world_dims
         plate_width_pixels = xmax - xmin
         plate_height_pixels = ymax - ymin
         # Calculate depth in meters from known plate size 
-        depth = (focal_length*plate_width) / plate_width_pixels
+        depth_width = (focal_length*plate_width) / plate_width_pixels
+        depth_height = (focal_length*plate_height) / plate_height_pixels
+        depth = (depth_width + depth_width) / 2
         # Create a 2D array of depth values
         depth_array = np.full((plate_height_pixels, plate_width_pixels), depth)
         confidence_array = np.full((plate_height_pixels, plate_width_pixels), confidence)
@@ -175,8 +176,7 @@ def draw(img, detections):
 
 if __name__ == "__main__":
     # Parameters
-    FRAME_RATE = 5 
-    PLATE_PIXEL_NUM = 2 # How many plate pixels to consider for depth calculation
+    FRAME_RATE = 4 
     CONFIDENCE_THRESHOLD = 0.75 # Only show detections with confidence above this threshold
     # Focal length of the camera value doesnt make much sense, but when tweaked until we get a reasonable depth value it seems consistent.
     # Might be some unit mistakes somewhere not sure
@@ -198,8 +198,8 @@ if __name__ == "__main__":
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = None
 
-    depth_estimator = DepthEstimatorZoe(model_type='NK', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
-    #depth_estimator = DepthEstimator(model_type='MiDaS_small', device='cpu') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
+    #depth_estimator = DepthEstimatorZoe(model_type='NK', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
+    depth_estimator = DepthEstimator(model_type='DPT_Large', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
 
     vehicle_detector = VehicleDetector('./yolov5.pt', device='cuda:0', confidence_threshold=CONFIDENCE_THRESHOLD)
     plate_detector = PlateDetector(device='cuda:0')

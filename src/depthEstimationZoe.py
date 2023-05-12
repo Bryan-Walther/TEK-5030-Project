@@ -80,8 +80,8 @@ class DepthEstimatorZoe:
             # weighted running average
             #weights = np.arange(1, len(self.scale_factors) + 1)
             #weighted_avg = np.sum(self.scale_factors * weights) / np.sum(weights)
-            updatedDepthMap = depthMap * x[0]
-            #updatedDepthMap = depthMap * np.mean(self.scale_factors)
+            #updatedDepthMap = depthMap * x[0]
+            updatedDepthMap = depthMap * np.mean(self.scale_factors)
             #updatedDepthMap = depthMap * weighted_avg
 
         return updatedDepthMap

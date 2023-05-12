@@ -28,6 +28,8 @@ class DepthEstimator:
 
         self.depth_map = None
         self.scale_factors = []
+        self.outlier_count = 0
+        self.reset_thresh = 100
 
     def predict_depth(self, img):
         cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -86,15 +88,40 @@ class DepthEstimator:
 
             x, _, _, _ = np.linalg.lstsq(corresponding_depths, true_depths, rcond=None)
 
-            print("scaling factor =", x[0])
-            self.scale_factors.append(x[0])
-            print("Mean scaling factor =", np.mean(self.scale_factors))
-            # weighted running average
-            #weights = np.arange(1, len(self.scale_factors) + 1)
-            #weighted_avg = np.sum(self.scale_factors * weights) / np.sum(weights)
-            updatedDepthMap = depthMap * x[0]
-            #updatedDepthMap = depthMap * np.mean(self.scale_factors)
-            #updatedDepthMap = depthMap * weighted_avg
+            # check if scale factor is an outlier
+            if not self.is_scale_factor_outlier(x[0]):
+                self.outlier_count = 0
+                print("scaling factor =", x[0])
+                self.scale_factors.append(x[0])
+                print("Mean scaling factor =", np.mean(self.scale_factors))
+                updatedDepthMap = depthMap * x[0]
+            else:
+                self.outlier_count += 1 if self.outlier_count < self.reset_thresh else 0
+                print(f"outlier detected: {x[0]}")
+                #updatedDepthMap = depthMap * self.scale_factors[-1]
+                updatedDepthMap = depthMap * np.mean(self.scale_factors)
+
 
         return updatedDepthMap
+
+    def is_scale_factor_outlier(self, current_scale_factor, num_stddevs=3.0):
+        """
+        Check if the current scale factor is an outlier relative to the previous scale factors.
+        :param scale_factors: List of previous scale factors.
+        :param current_scale_factor: Scale factor for the current time step.
+        :param num_stddevs: Number of standard deviations to consider as an outlier.
+        :return: True if the current scale factor is an outlier, False otherwise.
+        """
+        if len(self.scale_factors) < 10:
+            return False  # Not enough data to determine if current scale factor is an outlier.
+
+        # Calculate the mean and standard deviation of the previous scale factors.
+        mean = np.mean(self.scale_factors)
+        std = np.std(self.scale_factors)
+
+        # Check if the current scale factor is more than num_stddevs standard deviations away from the mean.
+        if abs(current_scale_factor - mean) > num_stddevs * std:
+            return True  # Current scale factor is an outlier.
+        else:
+            return False  # Current scale factor is not an outlier.
 
