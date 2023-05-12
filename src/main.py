@@ -4,6 +4,7 @@ from scipy.stats import iqr
 import matplotlib.pyplot as plt
 import torch
 
+from depthEstimationZoe import DepthEstimatorZoe
 from depthEstimation import DepthEstimator
 from vehicleDetection import VehicleDetector
 from plateDetection import PlateDetector
@@ -30,8 +31,8 @@ def drawVehicleDetections(img, detections):
     return detection_img
 
 
-# Gets the mean depth from depth map within a bounding box, currently used to determine the depth for detected vehicles.
-def getMeanDepth(depth, detections):
+# Gets the minimum depth from depth map within a bounding box, currently used to determine the depth for detected vehicles.
+def getMinDepth(depth, detections):
     # detections is a pandas dataframe with columns: xmin, ymin, xmax, ymax, confidence, class, name
     # Get depth of each detection
     # Add depth to detection data frame as a new column
@@ -42,14 +43,14 @@ def getMeanDepth(depth, detections):
         xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax), int(ymax)
         depth_values = depth[ymin:ymax, xmin:xmax].flatten()
         depth_values = depth_values[depth_values != 0] # remove zeros
-        depth_per_detection.append(depth_values.mean())
+        depth_per_detection.append(depth_values.min())
 
     # Add depth to detection data frame as a new column
     detections["depth"] = depth_per_detection
 
     return detections
 
-def estimateMeanDepth(detections, org_img, real_world_dims=(0.335, 0.155), focal_length=675): # Default plate size for korea 335mm width, 170mm height
+def estimateMeanDepth(detections, org_img, real_world_dims=(0.520, 0.110), focal_length=800): # Default plate size for korea 335mm width, 170mm height
     '''
     Takes cropped images of detected plates and estimates the depth from known world size of plate.
     All of the pixels belonging to the detections are then assigned to this estimated depth
@@ -64,39 +65,34 @@ def estimateMeanDepth(detections, org_img, real_world_dims=(0.335, 0.155), focal
         plate_width, plate_height = real_world_dims
         plate_width_pixels = xmax - xmin
         plate_height_pixels = ymax - ymin
-        # Calculate depth from known plate size
+        # Calculate depth in meters from known plate size 
         depth = (focal_length*plate_width) / plate_width_pixels
         # Create a 2D array of depth values
         depth_array = np.full((plate_height_pixels, plate_width_pixels), depth)
         # Create arrays of x and y coordinates
-        x_coords = np.arange(xmin, xmax)
-        y_coords = np.arange(ymin, ymax)
+        x_coords = np.arange(xmin, xmax).astype(np.int32)
+        y_coords = np.arange(ymin, ymax).astype(np.int32)
         # Create a grid of x and y coordinates
         xx, yy = np.meshgrid(x_coords, y_coords)
         # Stack the x, y, and depth arrays
-        pixel_coords_d = np.dstack((xx, yy, depth_array))
+        pixel_coords_d = np.dstack((yy,xx, depth_array))
         # Reshape the pixel_coords array into a 2D array
         pixel_coords_d = pixel_coords_d.reshape(-1, 3)
         # Append the pixel_coords to the estimates list
-        real_world_aspect_ratio = plate_width / plate_height
-        image_aspect_ratio = plate_width_pixels / plate_height_pixels
-        # if aspect ratios are within 58% of each other, then append the pixel coordinates
-        THRESHOLD = 0.70 # How much deviation from the real world aspect ratio is allowed
-        if abs(image_aspect_ratio - real_world_aspect_ratio) / real_world_aspect_ratio <= THRESHOLD:
-            pixel_coords = np.append(pixel_coords, pixel_coords_d, axis=0)
-            # FOR TESTING
-            # Draw bounding box on original image and add depth label
-            cv2.rectangle(org_img, (xmin, ymin), (xmax, ymax), (0, 0, 255), 2)
-            depth_label = "Depth: {:.2f} m".format(round(depth, 2))
-            # Add black background panel to depth label
-            label_size, _ = cv2.getTextSize(depth_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-            panel_size = (label_size[0]+10, label_size[1]+10)
-            panel_pos = (xmin, ymin - panel_size[1])
-            cv2.rectangle(org_img, panel_pos, (panel_pos[0]+panel_size[0], panel_pos[1]+panel_size[1]), (0,0,0), -1)
-            cv2.putText(org_img, depth_label, (panel_pos[0]+5, panel_pos[1]+label_size[1]+5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            #print("Aspects ratio of plate on image {} is {:.2f}".format(i, plate_width_pixels/plate_height_pixels))
-            #print("Aspect ratio of plate in real world is {:.2f}".format(plate_width/plate_height))
-    return pixel_coords.tolist()
+        pixel_coords = np.append(pixel_coords, pixel_coords_d, axis=0)
+
+        # Visualize for testing
+        # Draw bounding box on original image and add depth label
+        cv2.rectangle(org_img, (xmin, ymin), (xmax, ymax), (0, 0, 255), 2)
+        depth_label = "Depth: {:.2f} m".format(round(depth, 2))
+        # Add black background panel to depth label
+        label_size, _ = cv2.getTextSize(depth_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        panel_size = (label_size[0]+10, label_size[1]+10)
+        panel_pos = (xmin, ymin - panel_size[1])
+        cv2.rectangle(org_img, panel_pos, (panel_pos[0]+panel_size[0], panel_pos[1]+panel_size[1]), (0,0,0), -1)
+        cv2.putText(org_img, depth_label, (panel_pos[0]+5, panel_pos[1]+label_size[1]+5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+    return pixel_coords
 
 def cropDetection(src_img, detections, obj_type='vehicle'):
     # detections is a pandas dataframe with columns: xmin, ymin, xmax, ymax, confidence, class, name
@@ -175,58 +171,70 @@ def draw(img, detections):
 
 
 if __name__ == "__main__":
+    # Parameters
     FRAME_RATE = 5 
     CONFIDENCE_THRESHOLD = 0.75 # Only show detections with confidence above this threshold
     # Focal length of the camera value doesnt make much sense, but when tweaked until we get a reasonable depth value it seems consistent.
     # Might be some unit mistakes somewhere not sure
-    FOCAL_LENGTH = 811.82 
+    FOCAL_LENGTH = 1800.9 # Focal length is supposed to me in pixels. This is what we get from the camera calibration.
+    OFFSET = 0.0 # Offset to the focal length value for further calibration from camera matrix focal length
 
-    #cap = cv2.VideoCapture(0)
-    cap = cv2.VideoCapture('test_images/vid1.mp4')
+    # Camera intrinsics for when we use our own videos
+    camera_matrix = np.array([[6.6051081297156020e+02, 0.0, 3.1810845757653777e+02], 
+                              [0.0, 6.6051081297156020e+02, 2.3995332228230293e+02],
+                              [0, 0, 1]])
+    dist_coeffs = np.array([0., 2.2202255011309072e-01, 0., 0., -5.0348071005413975e-01])
+
+    # Change the focal length if using own camera
+    FOCAL_LENGTH = camera_matrix[0][0] + OFFSET
+    
+    #cap = cv2.VideoCapture(0) # Use webcam
+    cap = cv2.VideoCapture('test_images/recorded1_undistorted.mp4') # Use video file
     cap.set(cv2.CAP_PROP_FPS, FRAME_RATE)
-    follower_depth_estimator = DepthEstimator(model_type='MiDaS_small') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
-    vehicle_detector = VehicleDetector('./yolov5.pt', device='cpu', confidence_threshold=CONFIDENCE_THRESHOLD)
-    plate_detector = PlateDetector(device='cpu')
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = None
 
+    depth_estimator = DepthEstimatorZoe(model_type='NK', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
+    #depth_estimator = DepthEstimator(model_type='MiDaS_small', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
+
+    vehicle_detector = VehicleDetector('./yolov5.pt', device='cuda:0', confidence_threshold=CONFIDENCE_THRESHOLD)
+    plate_detector = PlateDetector(device='cuda:0')
     while True:
         key = cv2.waitKey(1)
         if key == ord('q'):
             break
         ret, frame = cap.read()
+        final_img = frame.copy()
+        depth_map = depth_estimator.predict_depth(frame)
 
-        # Predict depth
-        follower_depth_estimator.load_images_from_array([frame]) # Load first frame for testing
-        depth_map = follower_depth_estimator.predict_depth()
-
-        depth_map_norm = cv2.normalize(depth_map[0], None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-        colormap_depth_map = cv2.applyColorMap(depth_map_norm, cv2.COLORMAP_JET)
-
-        # Detect vehicles
         vehicle_boxes = vehicle_detector.detect(frame)
         if vehicle_boxes is not None:
-            vehicle_boxes = getMeanDepth(depth_map[0], vehicle_boxes) # Adds a depth column to the vehicle_boxes dataframe
-
-            # Draw detections of vehicles
-            vehicle_detection_img = drawVehicleDetections(frame, vehicle_boxes)
-
-            # Show cropped detections
             vehicle_cropped_images = cropDetection(frame, vehicle_boxes, obj_type='vehicle')
-            showCroppedDetection(vehicle_cropped_images, label='vehicles')
-            for vehicle_cropped_img in vehicle_cropped_images:
-                plate_boxes = plate_detector.detect(vehicle_cropped_img[0])
-                if plate_boxes is not None:
-                    plate_cropped_img = cropDetection(vehicle_cropped_img, plate_boxes, obj_type='plate')
-                    showCroppedDetection(plate_cropped_img, label='plates')
-                    #draw(vehicle_detection_img, [plate[1] for plate in plate_cropped_img]) # Overlay the plates onto the vehicle detection image
-                    estimated_depth = estimateMeanDepth(plate_cropped_img, vehicle_detection_img, focal_length=FOCAL_LENGTH)
-            
-            cv2.imshow('detection_img', vehicle_detection_img)
+            uncorrected_vehicle_boxes = getMinDepth(depth_map, vehicle_boxes.copy())
+            plate_boxes_per_vehicle = [plate_detector.detect(vehicle_img) for vehicle_img, _ in vehicle_cropped_images]
+            plate_cropped_images_per_vehicle = [cropDetection(cropped_img, plate_boxes_per_vehicle[i], obj_type='plate') for i, cropped_img in enumerate(vehicle_cropped_images)]
+            try:
+                known_depths = np.vstack([estimateMeanDepth(plate_cropped_img, final_img, focal_length=FOCAL_LENGTH) for plate_cropped_img in plate_cropped_images_per_vehicle])
+            except:
+                known_depths = None 
+            corrected_depth_map = depth_estimator.updateDepthEstimates(depth_map, known_depths)
+            corrected_vehicle_boxes = getMinDepth(corrected_depth_map, vehicle_boxes.copy())
+            # Draw the images with and without depth correction
+            uncorrected_final_img = drawVehicleDetections(final_img, uncorrected_vehicle_boxes) 
+            corrected_final_img = drawVehicleDetections(final_img, corrected_vehicle_boxes)
 
-        # Show frame and depth map side by side
-        #stack = np.hstack((frame, colormap_depth_map))
-        #cv2.imshow('Frame and corresponding depth map', stack)
+        # Show corrected and uncorrected images side by side
+        img = np.hstack((uncorrected_final_img, corrected_final_img))
+        #img = cv2.resize(img, (img.shape[1]//2, img.shape[0]//2))
+        cv2.imshow("Uncorrected(left) vs Corrected(right)", img)
 
+        if writer is None:
+            writer = cv2.VideoWriter("./runtime_out/result.mp4", fourcc, FRAME_RATE, (img.shape[1], img.shape[0]), True)
+        writer.write(img)
+        #cv2.imshow("Results without depth map correction", uncorrected_final_img)
+        #cv2.imshow('Results using corrected depth map', corrected_final_img)
 
+    if writer is not None:
+        writer.release()
     cap.release()
     cv2.destroyAllWindows()
-
