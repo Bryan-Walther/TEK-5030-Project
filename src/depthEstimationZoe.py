@@ -50,13 +50,13 @@ class DepthEstimatorZoe:
                 updatedDepthMap (MxNx1 numpy array) : numpy matrix of estimated depth map.
         '''
         if knownMeasurements is None:
-            return depthMap
+            return depthMap * self.scale_factors[-1] if len(self.scale_factors) != 0 else depthMap
         knownMeasurements_idx = knownMeasurements[:, 0:2].astype(int)
         knownMeasurements = knownMeasurements[:, 2]
 
         if(len(knownMeasurements) < 1):
             print("No correction points")
-            return depthMap
+            return depthMap * self.scale_factors[-1] if len(self.scale_factors) != 0 else depthMap
 
         elif(len(knownMeasurements) == 1):
             depthValue = depthMap[knownMeasurements_idx[0, 0], knownMeasurements_idx[0, 1]]

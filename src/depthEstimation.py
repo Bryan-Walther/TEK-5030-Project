@@ -27,6 +27,7 @@ class DepthEstimator:
             self.transform = self.midas_transforms.small_transform
 
         self.depth_map = None
+        self.scale_factors = []
 
     def predict_depth(self, img):
         cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -46,7 +47,7 @@ class DepthEstimator:
     def inv_depth_to_depth(self, inv_map):
         return 1 / (inv_map + 1e-6) # add small epsilon to avoid division by zero
 
-    def updateDepthEstimates(depthMap, knownMeasurements):
+    def updateDepthEstimates(self, depthMap, knownMeasurements):
         '''
         Depth map estimate update
 
@@ -61,13 +62,14 @@ class DepthEstimator:
                 updatedDepthMap (MxNx1 numpy array) : numpy matrix of estimated depth map.
         '''
         if knownMeasurements is None:
-            return depthMap
+            return depthMap * self.scale_factors[-1] if len(self.scale_factors) != 0 else depthMap
         knownMeasurements_idx = knownMeasurements[:, 0:2].astype(int)
         knownMeasurements = knownMeasurements[:, 2]
 
         if(len(knownMeasurements) < 1):
             print("No correction points")
-            return depthMap
+            return depthMap * self.scale_factors[-1] if len(self.scale_factors) != 0 else depthMap
+
         elif(len(knownMeasurements) == 1):
             depthValue = depthMap[knownMeasurements_idx[0, 0], knownMeasurements_idx[0, 1]]
             scalingFactor = knownMeasurements[0]/depthValue
@@ -85,8 +87,14 @@ class DepthEstimator:
             x, _, _, _ = np.linalg.lstsq(corresponding_depths, true_depths, rcond=None)
 
             print("scaling factor =", x[0])
+            self.scale_factors.append(x[0])
+            print("Mean scaling factor =", np.mean(self.scale_factors))
+            # weighted running average
+            #weights = np.arange(1, len(self.scale_factors) + 1)
+            #weighted_avg = np.sum(self.scale_factors * weights) / np.sum(weights)
             updatedDepthMap = depthMap * x[0]
+            #updatedDepthMap = depthMap * np.mean(self.scale_factors)
+            #updatedDepthMap = depthMap * weighted_avg
 
         return updatedDepthMap
-
 

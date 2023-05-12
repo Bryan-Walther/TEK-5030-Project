@@ -12,7 +12,7 @@ class PlateDetector:
         #self.model.iou = 0.45  # NMS IoU threshold
         #self.model.agnostic = False  # NMS class-agnostic
         #self.model.multi_label = False  # NMS multiple labels per box
-        #self.model.max_det = 1000  # maximum number of detections per image
+        self.model.max_det = 1  # maximum number of detections per image
 
     def detect(self, img):
         results = self.model(img, size=640)
