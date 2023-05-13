@@ -29,7 +29,7 @@ class DepthEstimator:
         self.depth_map = None
         self.scale_factors = []
         self.outlier_count = 0
-        self.reset_thresh = 100
+        self.reset_thresh = 35 # How many outlier detections before zeroing out scale factor history and outlier count
 
     def predict_depth(self, img):
         cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -94,17 +94,23 @@ class DepthEstimator:
                 print("scaling factor =", x[0])
                 self.scale_factors.append(x[0])
                 print("Mean scaling factor =", np.mean(self.scale_factors))
-                updatedDepthMap = depthMap * x[0]
+                #updatedDepthMap = depthMap * x[0]
             else:
-                self.outlier_count += 1 if self.outlier_count < self.reset_thresh else 0
+                if self.outlier_count < self.reset_thresh:
+                    self.outlier_count += 1 
+                else:
+                    self.outlier_count = 0
+                    last_scale_factor_mean = np.mean(self.scale_factors)
+                    self.scale_factors = []
+                    return depthMap * last_scale_factor_mean
                 print(f"outlier detected: {x[0]}")
                 #updatedDepthMap = depthMap * self.scale_factors[-1]
-                updatedDepthMap = depthMap * np.mean(self.scale_factors)
+            updatedDepthMap = depthMap * np.mean(self.scale_factors)
 
 
         return updatedDepthMap
 
-    def is_scale_factor_outlier(self, current_scale_factor, num_stddevs=3.0):
+    def is_scale_factor_outlier(self, current_scale_factor, num_stddevs=2.0):
         """
         Check if the current scale factor is an outlier relative to the previous scale factors.
         :param scale_factors: List of previous scale factors.

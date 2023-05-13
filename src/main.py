@@ -68,7 +68,7 @@ def estimateMeanDepth(detections, org_img, real_world_dims=(0.520, 0.110), focal
         # Calculate depth in meters from known plate size 
         depth_width = (focal_length*plate_width) / plate_width_pixels
         depth_height = (focal_length*plate_height) / plate_height_pixels
-        depth = (depth_width + depth_width) / 2
+        depth = (depth_width + depth_height) / 2
         # Create a 2D array of depth values
         depth_array = np.full((plate_height_pixels, plate_width_pixels), depth)
         confidence_array = np.full((plate_height_pixels, plate_width_pixels), confidence)
@@ -190,10 +190,10 @@ if __name__ == "__main__":
     dist_coeffs = np.array([0., 2.2202255011309072e-01, 0., 0., -5.0348071005413975e-01])
 
     # Change the focal length if using own camera
-    #FOCAL_LENGTH = camera_matrix[0][0] + OFFSET
+    FOCAL_LENGTH = camera_matrix[0][0] + OFFSET
     
     #cap = cv2.VideoCapture(0) # Use webcam
-    cap = cv2.VideoCapture('test_images/vid1.mp4') # Use video file
+    cap = cv2.VideoCapture('test_images/recorded2_undistorted.mp4') # Use video file
     cap.set(cv2.CAP_PROP_FPS, FRAME_RATE)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = None
@@ -235,6 +235,7 @@ if __name__ == "__main__":
         # Show corrected and uncorrected images side by side
         img = np.hstack((uncorrected_final_img, corrected_final_img))
         img = cv2.resize(img, (img.shape[1]//2, img.shape[0]//2))
+        #img = corrected_final_img
         cv2.imshow("Uncorrected(left) vs Corrected(right)", img)
 
         if writer is None:

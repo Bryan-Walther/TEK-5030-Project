@@ -25,6 +25,8 @@ class DepthEstimatorZoe:
             self.model = torch.hub.load(repo, "ZoeD_N", pretrained=True, force_reload=True, config_mode='eval').to(self.device)
         self.model.eval()
         self.scale_factors = []
+        self.outlier_count = 0
+        self.reset_thresh = 35 
 
     def predict_depth(self, img):
         inp = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -35,54 +37,84 @@ class DepthEstimatorZoe:
     def inv_depth_to_depth(self, inv_map):
         return 1 / (inv_map + 1e-6) # add small epsilon to avoid division by zero
 
-    def updateDepthEstimates(self, depthMap, knownMeasurements):
-        '''
-        Depth map estimate update
-
-        Updates a depth map based on known measurements across the depth range.
-
-            Parameters:
+    def updateDepthEstimates(self, depthMap, knownMeasurements):                
+        '''                                                                     
+        Depth map estimate update                                               
+                                                                                
+        Updates a depth map based on known measurements across the depth range. 
+                                                                                
+            Parameters:                                                         
                 depthMap (MxNx1 numpy array) : numpy matrix of estimated depth map.
                 knownMeasurements: Nx3 numpy matrix, N points with [x, y, z] values.
                 degree (int) : number of degrees for the polynomial regression model
-
-            Returns:
+                                                                                
+            Returns:                                                            
                 updatedDepthMap (MxNx1 numpy array) : numpy matrix of estimated depth map.
-        '''
-        if knownMeasurements is None:
+        '''                                                                     
+        if knownMeasurements is None:                                           
             return depthMap * self.scale_factors[-1] if len(self.scale_factors) != 0 else depthMap
-        knownMeasurements_idx = knownMeasurements[:, 0:2].astype(int)
-        knownMeasurements = knownMeasurements[:, 2]
-
-        if(len(knownMeasurements) < 1):
-            print("No correction points")
+        knownMeasurements_idx = knownMeasurements[:, 0:2].astype(int)           
+        knownMeasurements = knownMeasurements[:, 2]                             
+                                                                                
+        if(len(knownMeasurements) < 1):                                         
+            print("No correction points")                                          
             return depthMap * self.scale_factors[-1] if len(self.scale_factors) != 0 else depthMap
-
-        elif(len(knownMeasurements) == 1):
+                                                                                   
+        elif(len(knownMeasurements) == 1):                                         
             depthValue = depthMap[knownMeasurements_idx[0, 0], knownMeasurements_idx[0, 1]]
-            scalingFactor = knownMeasurements[0]/depthValue
+            scalingFactor = knownMeasurements[0]/depthValue                     
             print("scaling factor =", knownMeasurements[0], "/", depthValue, "=", scalingFactor)
-            #print("original(",knownMeasurements[0, 0])
-            updatedDepthMap = depthMap * scalingFactor
-
-        else:
+            #print("original(",knownMeasurements[0, 0])                         
+            updatedDepthMap = depthMap * scalingFactor                          
+                                                                                
+        else:                                                                   
             #get known measurements (normally retrived through object detection)
-            true_depths = knownMeasurements.reshape(-1, 1)
-
-            #find the corresponding points in the depth map estimate
+            true_depths = knownMeasurements.reshape(-1, 1)                      
+                                                                                
+            #find the corresponding points in the depth map estimate            
             corresponding_depths = depthMap[knownMeasurements_idx[:, 0], knownMeasurements_idx[:, 1]].reshape(-1, 1)
-
+                                                                                
             x, _, _, _ = np.linalg.lstsq(corresponding_depths, true_depths, rcond=None)
+                                                                                
+            # check if scale factor is an outlier                               
+            if not self.is_scale_factor_outlier(x[0]):                          
+                self.outlier_count = 0                                          
+                print("scaling factor =", x[0])                                 
+                self.scale_factors.append(x[0])                                 
+                print("Mean scaling factor =", np.mean(self.scale_factors))     
+                #updatedDepthMap = depthMap * x[0]                              
+            else:                                                               
+                if self.outlier_count < self.reset_thresh:                      
+                    self.outlier_count += 1                                     
+                else:                                                           
+                    self.outlier_count = 0                                      
+                    last_scale_factor_mean = np.mean(self.scale_factors)        
+                    self.scale_factors = []                                     
+                    return depthMap * last_scale_factor_mean                    
+                print(f"outlier detected: {x[0]}")                              
+                #updatedDepthMap = depthMap * self.scale_factors[-1]            
+            updatedDepthMap = depthMap * np.mean(self.scale_factors)            
+                                                                                
+                                                                                
+        return updatedDepthMap   
 
-            print("scaling factor =", x[0])
-            self.scale_factors.append(x[0])
-            print("Mean scaling factor =", np.mean(self.scale_factors))
-            # weighted running average
-            #weights = np.arange(1, len(self.scale_factors) + 1)
-            #weighted_avg = np.sum(self.scale_factors * weights) / np.sum(weights)
-            #updatedDepthMap = depthMap * x[0]
-            updatedDepthMap = depthMap * np.mean(self.scale_factors)
-            #updatedDepthMap = depthMap * weighted_avg
+    def is_scale_factor_outlier(self, current_scale_factor, num_stddevs=2.0):
+        """
+        Check if the current scale factor is an outlier relative to the previous scale factors.
+        :param scale_factors: List of previous scale factors.
+        :param current_scale_factor: Scale factor for the current time step.
+        :param num_stddevs: Number of standard deviations to consider as an outlier.
+        :return: True if the current scale factor is an outlier, False otherwise.
+        """
+        if len(self.scale_factors) < 10:
+            return False  # Not enough data to determine if current scale factor is an outlier.
 
-        return updatedDepthMap
+        # Calculate the mean and standard deviation of the previous scale factors.
+        mean = np.mean(self.scale_factors)
+        std = np.std(self.scale_factors)
 
+        # Check if the current scale factor is more than num_stddevs standard deviations away from the mean.
+        if abs(current_scale_factor - mean) > num_stddevs * std:
+            return True  # Current scale factor is an outlier.
+        else:
+            return False  # Current scale factor is not an outlier.
