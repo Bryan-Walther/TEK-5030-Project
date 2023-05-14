@@ -50,6 +50,25 @@ def getMinDepth(depth, detections):
 
     return detections
 
+# Taking the median is probably better, that way if any object gets infront of the detected car, it is less likely to pick the depth value of that object over the car.
+def getMedianDepth(depth, detections):
+    # detections is a pandas dataframe with columns: xmin, ymin, xmax, ymax, confidence, class, name
+    # Get depth of each detection
+    # Add depth to detection data frame as a new column
+    depth_per_detection = []
+    for i, detection in detections.iterrows():
+        xmin, ymin, xmax, ymax = detection["xmin"], detection["ymin"], detection["xmax"], detection["ymax"]
+        # Round xmin, ymin, xmax, ymax to int
+        xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax), int(ymax)
+        depth_values = depth[ymin:ymax, xmin:xmax].flatten()
+        depth_values = depth_values[depth_values != 0] # remove zeros
+        depth_per_detection.append(np.median(depth_values))
+
+    # Add depth to detection data frame as a new column
+    detections["depth"] = depth_per_detection
+
+    return detections
+
 def estimateMeanDepth(detections, org_img, real_world_dims=(0.520, 0.110), focal_length=800): # Default plate size for korea 335mm width, 170mm height
     '''
     Takes cropped images of detected plates and estimates the depth from known world size of plate.
@@ -193,12 +212,12 @@ if __name__ == "__main__":
     FOCAL_LENGTH = camera_matrix[0][0] + OFFSET
     
     #cap = cv2.VideoCapture(0) # Use webcam
-    cap = cv2.VideoCapture('test_images/recorded2_undistorted.mp4') # Use video file
+    cap = cv2.VideoCapture('test_images/recorded1_undistorted.mp4') # Use video file
     cap.set(cv2.CAP_PROP_FPS, FRAME_RATE)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = None
 
-    #depth_estimator = DepthEstimatorZoe(model_type='NK', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
+    #depth_estimator = DepthEstimatorZoe(model_type='K', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
     depth_estimator = DepthEstimator(model_type='DPT_Large', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
 
     vehicle_detector = VehicleDetector('./yolov5.pt', device='cuda:0', confidence_threshold=CONFIDENCE_THRESHOLD)
@@ -214,7 +233,7 @@ if __name__ == "__main__":
         vehicle_boxes = vehicle_detector.detect(frame)
         if vehicle_boxes is not None:
             vehicle_cropped_images = cropDetection(frame, vehicle_boxes, obj_type='vehicle')
-            uncorrected_vehicle_boxes = getMinDepth(depth_map, vehicle_boxes.copy())
+            uncorrected_vehicle_boxes = getMedianDepth(depth_map, vehicle_boxes.copy()) # Get Median depth or Min depth?
             plate_boxes_per_vehicle = [plate_detector.detect(vehicle_img) for vehicle_img, _, _ in vehicle_cropped_images]
             #plate_boxes = [box for boxes in plate_boxes_per_vehicle for box in boxes]
             plate_cropped_images_per_vehicle = [cropDetection(cropped_img, plate_boxes_per_vehicle[i], obj_type='plate') for i, cropped_img in enumerate(vehicle_cropped_images)]
