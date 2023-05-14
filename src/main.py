@@ -8,19 +8,21 @@ from depthEstimationZoe import DepthEstimatorZoe
 from depthEstimation import DepthEstimator
 from vehicleDetection import VehicleDetector
 from plateDetection import PlateDetector
+from generalDetection import GeneralDetector
 
 '''
 These extra functions should be moved to a utils file later
 '''
-def drawVehicleDetections(img, detections):
+def drawDetections(img, detections, label='vehicle'):
     # detections is a pandas dataframe with columns: xmin, ymin, xmax, ymax, confidence, class, name
     # Draw detections and add depth values as a label to the rectangle
+    color = (0, 255, 0) if label == 'vehicle' else (0, 255, 255) # green for vehicles, yellow otherwise
     detection_img = img.copy()
     for index, row in detections.iterrows():
         xmin, ymin, xmax, ymax = row['xmin'], row['ymin'], row['xmax'], row['ymax']
         # Round xmin, ymin, xmax, ymax to int
         xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax), int(ymax)
-        cv2.rectangle(detection_img, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+        cv2.rectangle(detection_img, (xmin, ymin), (xmax, ymax), color, 2)
         depth_label = "Depth: {:.2f} m".format(round(row['depth'], 2))
         # Add black background panel to depth label
         label_size, _ = cv2.getTextSize(depth_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
@@ -180,19 +182,6 @@ def getEdges(img):
 
     return img
 
-# Draw an array of rectangles on an image (general purpose)
-def draw(img, detections):
-    if detections is None:
-        return
-    # Draw a rectangle for each detection on the copy image
-    for detect in detections:
-        # Extract the coordinates of the detection
-        xmin, ymin, xmax, ymax = detect
-        # Draw a rectangle around the detection on the copy image
-        cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 0, 255), thickness=1)
-    # Return the copy image with the rectangles drawn on it
-
-
 if __name__ == "__main__":
     # Parameters
     FRAME_RATE = 4 
@@ -209,10 +198,10 @@ if __name__ == "__main__":
     dist_coeffs = np.array([0., 2.2202255011309072e-01, 0., 0., -5.0348071005413975e-01])
 
     # Change the focal length if using own camera
-    FOCAL_LENGTH = camera_matrix[0][0] + OFFSET
+    #FOCAL_LENGTH = camera_matrix[0][0] + OFFSET
     
     #cap = cv2.VideoCapture(0) # Use webcam
-    cap = cv2.VideoCapture('test_images/recorded1_undistorted.mp4') # Use video file
+    cap = cv2.VideoCapture('test_images/vid1.mp4') # Use video file
     cap.set(cv2.CAP_PROP_FPS, FRAME_RATE)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = None
@@ -222,6 +211,8 @@ if __name__ == "__main__":
 
     vehicle_detector = VehicleDetector('./yolov5.pt', device='cuda:0', confidence_threshold=CONFIDENCE_THRESHOLD)
     plate_detector = PlateDetector(device='cuda:0')
+
+    #person_detector = GeneralDetector(device='cuda:0', classes=[0]) # 0 class is only classifying "person"
     while True:
         key = cv2.waitKey(1)
         if key == ord('q'):
@@ -230,10 +221,14 @@ if __name__ == "__main__":
         final_img = frame.copy()
         depth_map = depth_estimator.predict_depth(frame)
 
+        # Detect vehicles
         vehicle_boxes = vehicle_detector.detect(frame)
+        # Detecting people
+        #person_boxes = person_detector.detect(frame)
+
         if vehicle_boxes is not None:
             vehicle_cropped_images = cropDetection(frame, vehicle_boxes, obj_type='vehicle')
-            uncorrected_vehicle_boxes = getMinDepth(depth_map, vehicle_boxes.copy()) # Get Median depth or Min depth?
+            uncorrected_vehicle_boxes = getMedianDepth(depth_map, vehicle_boxes.copy()) # Get Median depth or Min depth?
             plate_boxes_per_vehicle = [plate_detector.detect(vehicle_img) for vehicle_img, _, _ in vehicle_cropped_images]
             #plate_boxes = [box for boxes in plate_boxes_per_vehicle for box in boxes]
             plate_cropped_images_per_vehicle = [cropDetection(cropped_img, plate_boxes_per_vehicle[i], obj_type='plate') for i, cropped_img in enumerate(vehicle_cropped_images)]
@@ -245,11 +240,13 @@ if __name__ == "__main__":
                 known_depths = None
             #known_depths = None 
             corrected_depth_map = depth_estimator.updateDepthEstimates(depth_map, known_depths)
-            corrected_vehicle_boxes = getMinDepth(corrected_depth_map, vehicle_boxes.copy())
+            corrected_vehicle_boxes = getMedianDepth(corrected_depth_map, vehicle_boxes.copy())
+            #corrected_person_boxes = getMedianDepth(corrected_depth_map, person_boxes.copy())
 
             # Draw the images with and without depth correction
-            uncorrected_final_img = drawVehicleDetections(final_img, uncorrected_vehicle_boxes) 
-            corrected_final_img = drawVehicleDetections(final_img, corrected_vehicle_boxes)
+            uncorrected_final_img = drawDetections(final_img, uncorrected_vehicle_boxes, label='vehicle')
+            corrected_final_img = drawDetections(final_img, corrected_vehicle_boxes, label='vehicle')
+            #corrected_final_img = drawDetections(corrected_final_img, corrected_person_boxes, label='person')
 
         # Show corrected and uncorrected images side by side
         img = np.hstack((uncorrected_final_img, corrected_final_img))
