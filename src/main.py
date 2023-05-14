@@ -233,7 +233,7 @@ if __name__ == "__main__":
         vehicle_boxes = vehicle_detector.detect(frame)
         if vehicle_boxes is not None:
             vehicle_cropped_images = cropDetection(frame, vehicle_boxes, obj_type='vehicle')
-            uncorrected_vehicle_boxes = getMedianDepth(depth_map, vehicle_boxes.copy()) # Get Median depth or Min depth?
+            uncorrected_vehicle_boxes = getMinDepth(depth_map, vehicle_boxes.copy()) # Get Median depth or Min depth?
             plate_boxes_per_vehicle = [plate_detector.detect(vehicle_img) for vehicle_img, _, _ in vehicle_cropped_images]
             #plate_boxes = [box for boxes in plate_boxes_per_vehicle for box in boxes]
             plate_cropped_images_per_vehicle = [cropDetection(cropped_img, plate_boxes_per_vehicle[i], obj_type='plate') for i, cropped_img in enumerate(vehicle_cropped_images)]
