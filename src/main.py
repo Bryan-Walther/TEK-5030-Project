@@ -184,7 +184,7 @@ def getEdges(img):
 
 if __name__ == "__main__":
     # Parameters
-    FRAME_RATE = 4 
+    FRAME_RATE = 30 
     CONFIDENCE_THRESHOLD = 0.75 # Only show detections with confidence above this threshold
     # Focal length of the camera value doesnt make much sense, but when tweaked until we get a reasonable depth value it seems consistent.
     # Might be some unit mistakes somewhere not sure
@@ -198,21 +198,21 @@ if __name__ == "__main__":
     dist_coeffs = np.array([0., 2.2202255011309072e-01, 0., 0., -5.0348071005413975e-01])
 
     # Change the focal length if using own camera
-    #FOCAL_LENGTH = camera_matrix[0][0] + OFFSET
+    FOCAL_LENGTH = camera_matrix[0][0] + OFFSET
     
     #cap = cv2.VideoCapture(0) # Use webcam
-    cap = cv2.VideoCapture('test_images/vid1.mp4') # Use video file
+    cap = cv2.VideoCapture('test_images/recorded1_undistorted.mp4') # Use video file
     cap.set(cv2.CAP_PROP_FPS, FRAME_RATE)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = None
 
-    #depth_estimator = DepthEstimatorZoe(model_type='K', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
-    depth_estimator = DepthEstimator(model_type='DPT_Large', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
+    depth_estimator = DepthEstimatorZoe(model_type='K', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
+    #depth_estimator = DepthEstimator(model_type='DPT_Large', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
 
     vehicle_detector = VehicleDetector('./yolov5.pt', device='cuda:0', confidence_threshold=CONFIDENCE_THRESHOLD)
     plate_detector = PlateDetector(device='cuda:0')
 
-    #person_detector = GeneralDetector(device='cuda:0', classes=[0]) # 0 class is only classifying "person"
+    person_detector = GeneralDetector(device='cuda:0', classes=[0]) # 0 class is only classifying "person"
     while True:
         key = cv2.waitKey(1)
         if key == ord('q'):
@@ -224,11 +224,12 @@ if __name__ == "__main__":
         # Detect vehicles
         vehicle_boxes = vehicle_detector.detect(frame)
         # Detecting people
-        #person_boxes = person_detector.detect(frame)
+        person_boxes = person_detector.detect(frame)
 
         if vehicle_boxes is not None:
             vehicle_cropped_images = cropDetection(frame, vehicle_boxes, obj_type='vehicle')
             uncorrected_vehicle_boxes = getMedianDepth(depth_map, vehicle_boxes.copy()) # Get Median depth or Min depth?
+            uncorrected_person_boxes = getMedianDepth(depth_map, person_boxes.copy()) 
             plate_boxes_per_vehicle = [plate_detector.detect(vehicle_img) for vehicle_img, _, _ in vehicle_cropped_images]
             #plate_boxes = [box for boxes in plate_boxes_per_vehicle for box in boxes]
             plate_cropped_images_per_vehicle = [cropDetection(cropped_img, plate_boxes_per_vehicle[i], obj_type='plate') for i, cropped_img in enumerate(vehicle_cropped_images)]
@@ -241,17 +242,18 @@ if __name__ == "__main__":
             #known_depths = None 
             corrected_depth_map = depth_estimator.updateDepthEstimates(depth_map, known_depths)
             corrected_vehicle_boxes = getMedianDepth(corrected_depth_map, vehicle_boxes.copy())
-            #corrected_person_boxes = getMedianDepth(corrected_depth_map, person_boxes.copy())
+            corrected_person_boxes = getMedianDepth(corrected_depth_map, person_boxes.copy())
 
             # Draw the images with and without depth correction
             uncorrected_final_img = drawDetections(final_img, uncorrected_vehicle_boxes, label='vehicle')
+            uncorrected_final_img = drawDetections(uncorrected_final_img, uncorrected_person_boxes, label='person')
             corrected_final_img = drawDetections(final_img, corrected_vehicle_boxes, label='vehicle')
-            #corrected_final_img = drawDetections(corrected_final_img, corrected_person_boxes, label='person')
+            corrected_final_img = drawDetections(corrected_final_img, corrected_person_boxes, label='person')
 
         # Show corrected and uncorrected images side by side
         img = np.hstack((uncorrected_final_img, corrected_final_img))
-        img = cv2.resize(img, (img.shape[1]//2, img.shape[0]//2))
-        #img = corrected_final_img
+        #img = cv2.resize(img, (img.shape[1]//2, img.shape[0]//2))
+       #img = corrected_final_img
         cv2.imshow("Uncorrected(left) vs Corrected(right)", img)
 
         if writer is None:

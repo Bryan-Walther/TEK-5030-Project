@@ -8,6 +8,7 @@ class VehicleDetector:
 
         self.model = torch.hub.load('ultralytics/yolov5', 'custom', path=weights_path).to(device)
         self.model.conf = confidence_threshold # confidence threshold
+        self.model.classes = [0] # only detect cars
         #self.model.iou = 0.45                  # NMS IoU threshold
         #self.model.max_det = 1000              # maximum number of detections per image
 
