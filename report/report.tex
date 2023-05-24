@@ -3,6 +3,7 @@
 \title{TEK5030 Project Report}
 \usepackage[final]{pdfpages}
 \usepackage{amsmath}
+\usepackage{float}
 \usepackage{graphicx}
 \author{Bryan Walther, Didrik Samdanger, Carlos Ankour Navarro}
 \usepackage[utf8]{inputenc} 
@@ -53,13 +54,28 @@
 \maketitle
 
 \section{Introduction}
-% Explain what monocular depth estimation is, and the current methods of doing this using CNNs.
-% Mention MiDaS and ZoeDepth
-% Mention how MiDaS only provides relative depth without scale.
-% ZoeDepth attempts to predict depth in meters, but results are not great.
-% Introduce the idea of correcting the depth map given some known information about the scene, using traffic footage as a test case.
+Monocular depth estimation in computer vision is the problem of extracting depth information of a scene from single images captured by monocular cameras.
+This is a challenging problem because the ability to perceive depth is achieved through stereo vision, which adds a constraint to the problem of estimating the depth.
+In contrast, monocular depth estimation is an ill-posed problem, since we attempt to infer depth information of a scene using only visual cues of a single image.
+Most modern approaches to monocular depth estimation involves using large datasets with labeled images to train deep learning models, where the ground truth depth information for each sample is included in the training set.
+A popular model that does this is MiDaS, which is trained on up to 12 different datasets, and predicts the relative depth map for a given image.
+However, the predicted depth maps only offer depth information up to scale, meaning that we face the issue of scale-ambiguity.
+Some work has been done on attempting to learn the absolute depth of a scene, a notable example being ZoeDepth.
+ZoeDepth attempts to learn depth information while also maintaining the metric scale.
+After testing ZoeDepth however, we find that the accuracy of the model in predicting the true scale is generally poor.
+\\ \\
+In this project we attempt to tackle the problem of scale-ambiguity in estimated depth-maps by leveraging prior knowledge of the real world geometry of the scene.
+As a proof of concept, we apply this idea to traffic footage, where the goal is to get good distance estimates from a dash-camera to any object in the scene.
+
 \section{Methods}
-% Explain the approach for getting the correct scale of a depth map by detecting license plates with known real world dimensions.
+\textbf{TODO: Explain the approach for getting the correct scale of a depth map by detecting license plates with known real world dimensions.}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\textwidth]{img/illustration.png}
+    \caption{Depth estimation of license plates }
+    \label{fig:illustration}
+\end{figure}
+
 % Give outline of the procedure.
 % Include images of the depth map from both MiDaS and ZoeDepth
 % Mention how the ZoeDepth maps appear to have better resolution, which is why we chose these maps as initial maps.
