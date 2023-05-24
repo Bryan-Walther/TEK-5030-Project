@@ -51,4 +51,34 @@
 
 \begin{document}
 \maketitle
+
+\section{Introduction}
+% Explain what monocular depth estimation is, and the current methods of doing this using CNNs.
+% Mention MiDaS and ZoeDepth
+% Mention how MiDaS only provides relative depth without scale.
+% ZoeDepth attempts to predict depth in meters, but results are not great.
+% Introduce the idea of correcting the depth map given some known information about the scene, using traffic footage as a test case.
+\section{Methods}
+% Explain the approach for getting the correct scale of a depth map by detecting license plates with known real world dimensions.
+% Give outline of the procedure.
+% Include images of the depth map from both MiDaS and ZoeDepth
+% Mention how the ZoeDepth maps appear to have better resolution, which is why we chose these maps as initial maps.
+% Mention the downside being that its much slower.
+% Include images of the vehicle detections and the cropped images
+\section{Results}
+% Start by showing the parking lot example, where we already calibrate the camera and have the focal length.
+
+% Show the dashcam example, explain we do not calibrate the camera, and only manually tweak the focal length until we get somewhat reasonable results.
+% Only used to show a use case for this.
+\section{Discussion}
+% Explain how given we have a calibrated camera, and the focal length of the camera, the results seem pretty good for low precision use cases.
+% Explain some of the issues:
+%   - For this to work, we need good and stable license plate detections.
+%   - The issue of perspective when viewing the license plates, could be resolved through filtering or perspective using homography.
+%   - Cannot run realtime without a GPU
+%   - Poorly optimized
+\section{Conclusion}
+% Just summarize the results and the discussion.
+\end{document}
+
 \end{document}
