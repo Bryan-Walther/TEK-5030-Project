@@ -190,6 +190,9 @@ if __name__ == "__main__":
     # Might be some unit mistakes somewhere not sure
     FOCAL_LENGTH = 800.9 # Focal length is supposed to me in pixels. This is what we get from the camera calibration.
     OFFSET = 0.0 # Offset to the focal length value for further calibration from camera matrix focal length
+    DEVICE = 'cpu' # cpu or cuda:0
+    VIDEO_PATH = 'test_images/recorded1_undistorted.mp4'
+    WEBCAM = False
 
     # Camera intrinsics for when we use our own videos
     camera_matrix = np.array([[6.6051081297156020e+02, 0.0, 3.1810845757653777e+02], 
@@ -200,19 +203,18 @@ if __name__ == "__main__":
     # Change the focal length if using own camera
     FOCAL_LENGTH = camera_matrix[0][0] + OFFSET
     
-    #cap = cv2.VideoCapture(0) # Use webcam
-    cap = cv2.VideoCapture('test_images/recorded1_undistorted.mp4') # Use video file
+    cap = cv2.VideoCapture(0) if WEBCAM else cv2.VideoCapture(VIDEO_PATH)
     cap.set(cv2.CAP_PROP_FPS, FRAME_RATE)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = None
 
-    depth_estimator = DepthEstimatorZoe(model_type='K', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
+    depth_estimator = DepthEstimatorZoe(model_type='K', device=DEVICE) # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
     #depth_estimator = DepthEstimator(model_type='DPT_Large', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
 
-    vehicle_detector = VehicleDetector('./yolov5.pt', device='cuda:0', confidence_threshold=CONFIDENCE_THRESHOLD)
-    plate_detector = PlateDetector(device='cuda:0')
+    vehicle_detector = VehicleDetector('./yolov5.pt', device=DEVICE, confidence_threshold=CONFIDENCE_THRESHOLD)
+    plate_detector = PlateDetector(device=DEVICE)
 
-    person_detector = GeneralDetector(device='cuda:0', classes=[0]) # 0 class is only classifying "person"
+    person_detector = GeneralDetector(device=DEVICE, classes=[0]) # 0 class is only classifying "person"
     while True:
         key = cv2.waitKey(1)
         if key == ord('q'):
