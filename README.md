@@ -11,6 +11,9 @@ After testing ZoeDepth however, we find that the accuracy of the model in predic
 
 In this project we attempt to tackle the problem of scale-ambiguity in estimated depth-maps by leveraging prior knowledge of the real world geometry of the scene.
 As a proof of concept, we apply this idea to traffic footage, where the goal is to get good distance estimates from a dash-camera to any object in the scene.
+We use the license plates with standardized real world dimensions as our prior knowledge, and use object detection to find the image dimensions of the plate.
+
+![Runtime example](report/img/dashcam-example.png)
 
 # Usage
 To use the script, you need to provide the following parameters in `main.py`
@@ -25,3 +28,4 @@ The following parameters can be changed from its default values
 - `frame_rate` : How many frames per second do we want to include, default is 30
 - `OFFSET` : Add offset to focal length to further calibrate based on ground truth measurments of distance to the plate, default is 0.0
 - `CONFIDENCE_THRESHOLD` : Only show detections with confidence above this threshold, default is 0.75
+
