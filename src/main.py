@@ -209,7 +209,7 @@ if __name__ == "__main__":
     writer = None
 
     depth_estimator = DepthEstimatorZoe(model_type='K', device=DEVICE) # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
-    #depth_estimator = DepthEstimator(model_type='DPT_Large', device='cuda:0') # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
+    #depth_estimator = DepthEstimator(model_type='MiDaS_small', device=DEVICE) # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
 
     vehicle_detector = VehicleDetector('./yolov5.pt', device=DEVICE, confidence_threshold=CONFIDENCE_THRESHOLD)
     plate_detector = PlateDetector(device=DEVICE)
@@ -233,7 +233,6 @@ if __name__ == "__main__":
             uncorrected_vehicle_boxes = getMedianDepth(depth_map, vehicle_boxes.copy()) # Get Median depth or Min depth?
             uncorrected_person_boxes = getMedianDepth(depth_map, person_boxes.copy()) 
             plate_boxes_per_vehicle = [plate_detector.detect(vehicle_img) for vehicle_img, _, _ in vehicle_cropped_images]
-            #plate_boxes = [box for boxes in plate_boxes_per_vehicle for box in boxes]
             plate_cropped_images_per_vehicle = [cropDetection(cropped_img, plate_boxes_per_vehicle[i], obj_type='plate') for i, cropped_img in enumerate(vehicle_cropped_images)]
 
             # Estimate depth of plate and correct depth map
@@ -241,7 +240,7 @@ if __name__ == "__main__":
                 known_depths = np.vstack([estimateMeanDepth(plate_cropped_img, final_img, focal_length=FOCAL_LENGTH) for plate_cropped_img in plate_cropped_images_per_vehicle])
             except:
                 known_depths = None
-            #known_depths = None 
+
             corrected_depth_map = depth_estimator.updateDepthEstimates(depth_map, known_depths)
             corrected_vehicle_boxes = getMedianDepth(corrected_depth_map, vehicle_boxes.copy())
             corrected_person_boxes = getMedianDepth(corrected_depth_map, person_boxes.copy())
@@ -255,11 +254,11 @@ if __name__ == "__main__":
         # Show corrected and uncorrected images side by side
         img = np.hstack((uncorrected_final_img, corrected_final_img))
         #img = cv2.resize(img, (img.shape[1]//2, img.shape[0]//2))
-       #img = corrected_final_img
+        #img = corrected_final_img
         cv2.imshow("Uncorrected(left) vs Corrected(right)", img)
 
         if writer is None:
-            writer = cv2.VideoWriter("./runtime_out/result.mp4", fourcc, FRAME_RATE, (img.shape[1], img.shape[0]), True)
+            writer = cv2.VideoWriter("./results/result.mp4", fourcc, FRAME_RATE, (img.shape[1], img.shape[0]), True)
         writer.write(img)
         #cv2.imshow("Results without depth map correction", uncorrected_final_img)
         #cv2.imshow('Results using corrected depth map', corrected_final_img)

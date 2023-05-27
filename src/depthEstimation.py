@@ -30,7 +30,7 @@ class DepthEstimator:
         self.scale_factors = []
         self.outlier_count = 0
         self.reset_thresh = 35 # How many outlier detections before zeroing out scale factor history and outlier count
-        self.N = 5 # Number of points to use for scale factor averaging
+        self.N = 15 # Number of points to use for scale factor averaging
 
     def predict_depth(self, img):
         cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -89,27 +89,27 @@ class DepthEstimator:
 
             x, _, _, _ = np.linalg.lstsq(corresponding_depths, true_depths, rcond=None)
 
-            # check if scale factor is an outlier
-            if not self.is_scale_factor_outlier(x[0]):
-                self.outlier_count = 0
-                print("scaling factor =", x[0])
-                self.scale_factors.append(x[0])
-                print("Mean scaling factor =", np.mean(self.scale_factors))
-                #updatedDepthMap = depthMap * x[0]
-            else:
-                if self.outlier_count < self.reset_thresh:
-                    self.outlier_count += 1 
-                else:
-                    self.outlier_count = 0
-                    last_scale_factor_mean = np.mean(self.scale_factors[-self.N:])
-                    self.scale_factors = []
-                    return depthMap * last_scale_factor_mean
-                print(f"outlier detected: {x[0]}")
-                #updatedDepthMap = depthMap * self.scale_factors[-1]
-            updatedDepthMap = depthMap * np.mean(self.scale_factors)
+            # check if scale factor is an outlier                               
+            if not self.is_scale_factor_outlier(x[0]):                          
+                self.outlier_count = 0                                          
+                print("scaling factor =", x[0])                                 
+                self.scale_factors.append(x[0])                                 
+                print("Mean scaling factor =", np.mean(self.scale_factors))     
+                #updatedDepthMap = depthMap * x[0]                              
+            else:                                                               
+                if self.outlier_count < self.reset_thresh:                      
+                    self.outlier_count += 1                                     
+                else:                                                           
+                    self.outlier_count = 0                                      
+                    last_scale_factor_mean = np.mean(self.scale_factors[-self.N:]) if len(self.scale_factors) > self.N else np.mean(self.scale_factors)
+                    self.scale_factors = []                                     
+                    return depthMap * last_scale_factor_mean                    
+                print(f"outlier detected: {x[0]}")                              
 
-
-        return updatedDepthMap
+            updatedDepthMap = depthMap * np.mean(self.scale_factors[-self.N:]) if len(self.scale_factors) > self.N else depthMap * np.mean(self.scale_factors)
+                                                                                
+                                                                                
+        return updatedDepthMap   
 
     def is_scale_factor_outlier(self, current_scale_factor, num_stddevs=2.0):
         """

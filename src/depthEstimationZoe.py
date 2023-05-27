@@ -26,6 +26,7 @@ class DepthEstimatorZoe:
         self.model.eval()
         self.scale_factors = []
         self.outlier_count = 0
+        self.N = 15 # number of points to use for averaging
         self.reset_thresh = 35 
 
     def predict_depth(self, img):
@@ -88,12 +89,12 @@ class DepthEstimatorZoe:
                     self.outlier_count += 1                                     
                 else:                                                           
                     self.outlier_count = 0                                      
-                    last_scale_factor_mean = np.mean(self.scale_factors)        
+                    last_scale_factor_mean = np.mean(self.scale_factors[-self.N:]) if len(self.scale_factors) > self.N else np.mean(self.scale_factors)
                     self.scale_factors = []                                     
                     return depthMap * last_scale_factor_mean                    
                 print(f"outlier detected: {x[0]}")                              
-                #updatedDepthMap = depthMap * self.scale_factors[-1]            
-            updatedDepthMap = depthMap * np.mean(self.scale_factors)            
+
+            updatedDepthMap = depthMap * np.mean(self.scale_factors[-self.N:]) if len(self.scale_factors) > self.N else depthMap * np.mean(self.scale_factors)
                                                                                 
                                                                                 
         return updatedDepthMap   
