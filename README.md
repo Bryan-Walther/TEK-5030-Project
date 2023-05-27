@@ -14,7 +14,7 @@ As a proof of concept, we apply this idea to traffic footage, where the goal is 
 We use the license plates with standardized real world dimensions as our prior knowledge, and use object detection to find the image dimensions of the plate.
 
 ![Runtime example](src/runtime_out/person_detection.webm)
-*Unaligned depth map(left) vs aligned corrected depth map(right)
+*Unaligned depth map(left) vs aligned corrected depth map(right)*
 
 # Usage
 To use the script, you need to provide the following parameters in `main.py`
