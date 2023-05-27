@@ -30,6 +30,7 @@ class DepthEstimator:
         self.scale_factors = []
         self.outlier_count = 0
         self.reset_thresh = 35 # How many outlier detections before zeroing out scale factor history and outlier count
+        self.N = 5 # Number of points to use for scale factor averaging
 
     def predict_depth(self, img):
         cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -100,7 +101,7 @@ class DepthEstimator:
                     self.outlier_count += 1 
                 else:
                     self.outlier_count = 0
-                    last_scale_factor_mean = np.mean(self.scale_factors)
+                    last_scale_factor_mean = np.mean(self.scale_factors[-self.N:])
                     self.scale_factors = []
                     return depthMap * last_scale_factor_mean
                 print(f"outlier detected: {x[0]}")
