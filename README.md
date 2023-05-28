@@ -27,6 +27,7 @@ The following parameters can be changed from its default values
 
 - `frame_rate` : How many frames per second do we want to include, default is 30
 - `OFFSET` : Add offset to focal length to further calibrate based on ground truth measurments of distance to the plate, default is 0.0
+- `DEVICE` : Uses CPU by default, change to 'cuda:0' for GPU. 
 - `CONFIDENCE_THRESHOLD` : Only show detections with confidence above this threshold, default is 0.75
 
 If using CPU, use the MiDaS\_small model in `main.py`, DPT\_Large and ZoeDepth are too slow on CPU:
