@@ -32,7 +32,6 @@ def drawDetections(img, detections, label='vehicle'):
         cv2.putText(detection_img, depth_label, (panel_pos[0]+5, panel_pos[1]+label_size[1]+5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
     return detection_img
 
-
 # Gets the minimum depth from depth map within a bounding box, currently used to determine the depth for detected vehicles.
 def getMinDepth(depth, detections):
     # detections is a pandas dataframe with columns: xmin, ymin, xmax, ymax, confidence, class, name
@@ -71,7 +70,7 @@ def getMedianDepth(depth, detections):
 
     return detections
 
-def estimateMeanDepth(detections, org_img, real_world_dims=(0.520, 0.110), focal_length=800): # Default plate size for korea 335mm width, 170mm height
+def estimatePlateDepth(detections, org_img, real_world_dims=(0.520, 0.110), focal_length=800): # Default plate size for korea 335mm width, 170mm height
     '''
     Takes cropped images of detected plates and estimates the depth from known world size of plate.
     All of the pixels belonging to the detections are then assigned to this estimated depth
@@ -129,7 +128,6 @@ def cropDetection(src_img, detections, obj_type='vehicle'):
         detection_img = src_img[0].copy()
         img = src_img[0]
         
-
     cropped_images = []
     for i, detection in detections.iterrows():
         xmin, ymin, xmax, ymax = detection['xmin'], detection['ymin'], detection['xmax'], detection['ymax']
@@ -186,9 +184,7 @@ if __name__ == "__main__":
     # Parameters
     FRAME_RATE = 30 
     CONFIDENCE_THRESHOLD = 0.75 # Only show detections with confidence above this threshold
-    # Focal length of the camera value doesnt make much sense, but when tweaked until we get a reasonable depth value it seems consistent.
-    # Might be some unit mistakes somewhere not sure
-    FOCAL_LENGTH = 800.9 # Focal length is supposed to me in pixels. This is what we get from the camera calibration.
+    FOCAL_LENGTH = 800.9 # Focal length is supposed to be in pixels. This is what we get from the camera calibration.
     OFFSET = 0.0 # Offset to the focal length value for further calibration from camera matrix focal length
     DEVICE = 'cpu' # cpu or cuda:0
     VIDEO_PATH = 'test_images/recorded1_undistorted.mp4'
@@ -208,7 +204,8 @@ if __name__ == "__main__":
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = None
 
-    depth_estimator = DepthEstimatorZoe(model_type='K', device=DEVICE) # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
+    # Use MiDaS_small if running on CPU, otherwise DPT_Large or ZoeDepth's K variant model.
+    depth_estimator = DepthEstimatorZoe(model_type='K', device=DEVICE) # K for outdoors scene, N for indoors, NK for general case. Don't even bother with this one without GPU. Does produce better depth maps though
     #depth_estimator = DepthEstimator(model_type='MiDaS_small', device=DEVICE) # DPT_Large, MiDaS_small DPT_Large is more accurate but slower. MiDaS_small seems to be good enough though.
 
     vehicle_detector = VehicleDetector('./yolov5.pt', device=DEVICE, confidence_threshold=CONFIDENCE_THRESHOLD)
@@ -230,14 +227,14 @@ if __name__ == "__main__":
 
         if vehicle_boxes is not None:
             vehicle_cropped_images = cropDetection(frame, vehicle_boxes, obj_type='vehicle')
-            uncorrected_vehicle_boxes = getMedianDepth(depth_map, vehicle_boxes.copy()) # Get Median depth or Min depth?
+            uncorrected_vehicle_boxes = getMedianDepth(depth_map, vehicle_boxes.copy())
             uncorrected_person_boxes = getMedianDepth(depth_map, person_boxes.copy()) 
             plate_boxes_per_vehicle = [plate_detector.detect(vehicle_img) for vehicle_img, _, _ in vehicle_cropped_images]
             plate_cropped_images_per_vehicle = [cropDetection(cropped_img, plate_boxes_per_vehicle[i], obj_type='plate') for i, cropped_img in enumerate(vehicle_cropped_images)]
 
             # Estimate depth of plate and correct depth map
             try:
-                known_depths = np.vstack([estimateMeanDepth(plate_cropped_img, final_img, focal_length=FOCAL_LENGTH) for plate_cropped_img in plate_cropped_images_per_vehicle])
+                known_depths = np.vstack([estimatePlateDepth(plate_cropped_img, final_img, focal_length=FOCAL_LENGTH) for plate_cropped_img in plate_cropped_images_per_vehicle])
             except:
                 known_depths = None
 

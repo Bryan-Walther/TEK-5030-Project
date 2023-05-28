@@ -4,8 +4,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 '''
-Uses a pre-trained model to estimate the depth of a monocular image.
-Might be useful depending on how we want to try to estimate the depth.
+Uses a pre-trained MiDaS model to estimate the depth of a monocular image.
 It is fairly slow without a GPU, but it is possible to use in real time with a GPU.
 '''
 class DepthEstimator:
@@ -77,7 +76,6 @@ class DepthEstimator:
             depthValue = depthMap[knownMeasurements_idx[0, 0], knownMeasurements_idx[0, 1]]
             scalingFactor = knownMeasurements[0]/depthValue
             print("scaling factor =", knownMeasurements[0], "/", depthValue, "=", scalingFactor)
-            #print("original(",knownMeasurements[0, 0])
             updatedDepthMap = depthMap * scalingFactor
 
         else:
@@ -108,7 +106,6 @@ class DepthEstimator:
 
             updatedDepthMap = depthMap * np.mean(self.scale_factors[-self.N:]) if len(self.scale_factors) > self.N else depthMap * np.mean(self.scale_factors)
                                                                                 
-                                                                                
         return updatedDepthMap   
 
     def is_scale_factor_outlier(self, current_scale_factor, num_stddevs=2.0):
@@ -131,4 +128,3 @@ class DepthEstimator:
             return True  # Current scale factor is an outlier.
         else:
             return False  # Current scale factor is not an outlier.
-

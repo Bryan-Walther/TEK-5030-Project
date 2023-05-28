@@ -3,9 +3,10 @@ import cv2
 import numpy as np
 from PIL import Image
 '''
-Uses a pre-trained model to estimate the depth of a monocular image.
-Might be useful depending on how we want to try to estimate the depth.
-It is fairly slow without a GPU, but it is possible to use in real time with a GPU.
+Uses a pre-trained ZoeDepth model to estimate the depth of a monocular image.
+In contrast to MiDaS, this model attempts to recover the metric scale, but often it is way off the true scale.
+It does however produce depth maps with more detail.
+Don't even bother running this on CPU, its even slow-ish on GPU. 
 '''
 torch.hub._validate_not_a_forked_repo=lambda a,b,c: True
 
@@ -14,15 +15,15 @@ class DepthEstimatorZoe:
         self.device = device # cpu or cuda
         self.model_type = model_type
 
-        torch.hub.help("intel-isl/MiDaS", "DPT_BEiT_L_384", force_reload=True)  # Triggers fresh download of MiDaS repo
+        torch.hub.help("intel-isl/MiDaS", "DPT_BEiT_L_384", force_reload=False)
         repo = "isl-org/ZoeDepth"
 
         if self.model_type == 'NK':
-            self.model = torch.hub.load(repo, "ZoeD_NK", pretrained=True, force_reload=True, config_mode='eval').to(self.device)
+            self.model = torch.hub.load(repo, "ZoeD_NK", pretrained=True, force_reload=False, config_mode='eval').to(self.device)
         elif self.model_type == 'K':
-            self.model = torch.hub.load(repo, "ZoeD_K", pretrained=True, force_reload=True, config_mode='eval').to(self.device)
+            self.model = torch.hub.load(repo, "ZoeD_K", pretrained=True, force_reload=False, config_mode='eval').to(self.device)
         elif self.model_type == 'N':
-            self.model = torch.hub.load(repo, "ZoeD_N", pretrained=True, force_reload=True, config_mode='eval').to(self.device)
+            self.model = torch.hub.load(repo, "ZoeD_N", pretrained=True, force_reload=False, config_mode='eval').to(self.device)
         self.model.eval()
         self.scale_factors = []
         self.outlier_count = 0
@@ -65,7 +66,6 @@ class DepthEstimatorZoe:
             depthValue = depthMap[knownMeasurements_idx[0, 0], knownMeasurements_idx[0, 1]]
             scalingFactor = knownMeasurements[0]/depthValue                     
             print("scaling factor =", knownMeasurements[0], "/", depthValue, "=", scalingFactor)
-            #print("original(",knownMeasurements[0, 0])                         
             updatedDepthMap = depthMap * scalingFactor                          
                                                                                 
         else:                                                                   

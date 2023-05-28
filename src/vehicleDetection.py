@@ -22,9 +22,8 @@ class VehicleDetector:
         '''
         pred = self.model(inp)
         self.current_prediction = pred
+
         return pred.pandas().xyxy[0].sort_values(by=['confidence'], ascending=False)
-
-
 
     def show_detections(self):
         if self.current_prediction is not None:
@@ -39,8 +38,3 @@ if __name__ == '__main__':
     detections = detector.detect(img_path)
 
     print(detections)
-
-    
-    
-
-
