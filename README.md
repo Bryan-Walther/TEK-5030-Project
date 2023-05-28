@@ -29,3 +29,14 @@ The following parameters can be changed from its default values
 - `OFFSET` : Add offset to focal length to further calibrate based on ground truth measurments of distance to the plate, default is 0.0
 - `CONFIDENCE_THRESHOLD` : Only show detections with confidence above this threshold, default is 0.75
 
+If using CPU, use the MiDaS\_small model in `main.py`, DPT\_Large and ZoeDepth are too slow on CPU:
+```python
+depth_estimator = DepthEstimator(model_type='MiDaS_small', device=DEVICE)
+```
+If using GPU, use ZoeDepth for best quality depth maps if its not too slow, otherwise DPT_Large is a good option.
+```python
+# ZoeDepth
+depth_estimator = DepthEstimatorZoe(model_type='K', device=DEVICE)
+# Or DPT_Large
+depth_estimator = DepthEstimator(model_type='DPT_Large', device=DEVICE)
+```
